@@ -47,12 +47,13 @@ import paramiko
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-SERVER_TYPE      = "cx23"                        # 2 vCPU / 4 GB RAM (Intel)
-IMAGE_NAME       = "ubuntu-24.04"
-LOCATION_NAME    = "hel1"                        # Preferred location
-LOCATION_FALLBACKS = ("fsn1", "nbg1", "hel1")      # Tried when placement capacity is unavailable
-CREATE_VM_ATTEMPTS = 6
-CREATE_VM_WORKERS  = 6                            # Avoid large placement bursts
+EU_SERVER_TYPE       = "cx23"   # Cost-optimized; available in EU locations
+GLOBAL_SERVER_TYPE   = "cpx22"  # AMD; available in EU, US, and Singapore
+IMAGE_NAME           = "ubuntu-24.04"
+LOCATION_NAME        = "hel1"
+LOCATION_FALLBACKS   = ("fsn1", "nbg1", "ash", "hil", "sin")
+CREATE_VM_ROUNDS     = 2        # Try the complete placement list this many times
+CREATE_VM_WORKERS    = 4        # Keep placement/API bursts modest
 DOMAIN_SUFFIX    = "container.it-scholar.com"
 HETZNER_KEY_NAME = "container-seminar-provisioner"
 FW_NAME          = "container-seminar-fw"
@@ -240,16 +241,33 @@ def ensure_firewall() -> object:
     return result.firewall
 
 
-def _placement_locations() -> tuple[str, ...]:
-    """Return preferred + fallback locations without duplicates."""
+def _placement_candidates() -> tuple[tuple[str, str], ...]:
+    """Return ordered (location, server_type) placement candidates.
+
+    CX plans are restricted to the EU locations. CPX plans are used for the
+    United States and Singapore, and as a second server-type fallback in EU.
+    HCLOUD_LOCATIONS may override the location order.
+    """
     configured = os.getenv("HCLOUD_LOCATIONS", "")
-    candidates = (
+    locations = (
         tuple(part.strip() for part in configured.split(",") if part.strip())
         if configured
         else (LOCATION_NAME, *LOCATION_FALLBACKS)
     )
-    return tuple(dict.fromkeys(candidates))
+    locations = tuple(dict.fromkeys(locations))
+    eu_locations = {"hel1", "fsn1", "nbg1"}
 
+    candidates: list[tuple[str, str]] = []
+    for location in locations:
+        server_type = EU_SERVER_TYPE if location in eu_locations else GLOBAL_SERVER_TYPE
+        candidates.append((location, server_type))
+
+    # If EU CX capacity is exhausted, retry EU using the globally available CPX type.
+    for location in locations:
+        if location in eu_locations:
+            candidates.append((location, GLOBAL_SERVER_TYPE))
+
+    return tuple(dict.fromkeys(candidates))
 
 def _is_retryable_create_error(exc: Exception) -> bool:
     """Identify temporary Hetzner placement/capacity errors."""
@@ -275,11 +293,14 @@ def create_vm(name: str, ssh_key: object) -> tuple[str, str]:
         log(f"  VM '{name}' already exists (IP: {ip}), skipping.")
         return name, ip
 
-    locations = _placement_locations()
+    candidates = _placement_candidates()
+    max_attempts = len(candidates) * CREATE_VM_ROUNDS
     last_error: Exception | None = None
+    successful_location = "unknown"
+    successful_server_type = "unknown"
 
-    for attempt in range(1, CREATE_VM_ATTEMPTS + 1):
-        location = locations[(attempt - 1) % len(locations)]
+    for attempt in range(1, max_attempts + 1):
+        location, server_type = candidates[(attempt - 1) % len(candidates)]
 
         # Another attempt or process may have completed this VM meanwhile.
         existing = hc.servers.get_by_name(name)
@@ -289,13 +310,13 @@ def create_vm(name: str, ssh_key: object) -> tuple[str, str]:
             return name, ip
 
         log(
-            f"  Creating VM '{name}' ({SERVER_TYPE}, {IMAGE_NAME}, {location}) "
-            f"attempt {attempt}/{CREATE_VM_ATTEMPTS} ..."
+            f"  Creating VM '{name}' ({server_type}, {IMAGE_NAME}, {location}) "
+            f"attempt {attempt}/{max_attempts} ..."
         )
         try:
             hc.servers.create(
                 name=name,
-                server_type=ServerType(name=SERVER_TYPE),
+                server_type=ServerType(name=server_type),
                 image=Image(name=IMAGE_NAME),
                 location=Location(name=location),
                 ssh_keys=[ssh_key],
@@ -305,16 +326,18 @@ def create_vm(name: str, ssh_key: object) -> tuple[str, str]:
                 ),
             )
             last_error = None
+            successful_location = location
+            successful_server_type = server_type
             break
         except Exception as exc:
             last_error = exc
-            if not _is_retryable_create_error(exc) or attempt == CREATE_VM_ATTEMPTS:
+            if not _is_retryable_create_error(exc) or attempt == max_attempts:
                 raise
             delay = min(60, 5 * attempt)
-            next_location = locations[attempt % len(locations)]
+            next_location, next_server_type = candidates[attempt % len(candidates)]
             log(
                 f"  VM '{name}' placement failed in {location}: {exc}. "
-                f"Retrying in {delay}s using {next_location}."
+                f"Retrying in {delay}s using {next_server_type} in {next_location}."
             )
             time.sleep(delay)
     else:
@@ -332,7 +355,10 @@ def create_vm(name: str, ssh_key: object) -> tuple[str, str]:
         raise RuntimeError(f"Server '{name}' did not reach running state after 600s")
 
     ip = server.public_net.ipv4.ip
-    log(f"  VM '{name}' created in {server.datacenter.location.name} (IP: {ip})")
+    log(
+        f"  VM '{name}' created using {successful_server_type} "
+        f"in {successful_location} (IP: {ip})"
+    )
     return name, ip
 
 
