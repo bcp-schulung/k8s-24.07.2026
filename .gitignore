@@ -1,0 +1,20 @@
+# Environment / secrets — never commit
+.env
+.passwords.json
+.harbor-passwords.json
+container-seminar-credentials.md
+student-credentials/
+*.kubeconfig
+*.talosconfig
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+**/.DS_Store

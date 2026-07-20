@@ -1,0 +1,2 @@
+# HTTPRoutes are not needed with the LoadBalancer approach.
+# ArgoCD is exposed directly via argocd-lb service (01-gateway.yaml).

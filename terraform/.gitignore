@@ -1,0 +1,12 @@
+# Terraform state — never commit
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+
+# Cluster access credentials — never commit
+kubeconfig
+talosconfig
+
+# Local variable overrides
+terraform.tfvars

@@ -1,0 +1,40 @@
+# Gateway — Cilium Gateway API
+#
+# Cilium creates a Hetzner Cloud Load Balancer for this Gateway and assigns it
+# a public IPv4 address. deploy.sh reads that address and creates the
+# harbor.container.it-scholar.com A record in Cloudflare.
+#
+# HTTPS listener is initially degraded (Secret harbor-tls does not exist yet);
+# it becomes healthy once cert-manager issues the certificate (03-certificate.yaml).
+#
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: harbor-gateway
+  namespace: harbor
+spec:
+  gatewayClassName: cilium
+  listeners:
+    # ── HTTP: only used to redirect to HTTPS ──────────────────────────────────
+    - name: http
+      port: 80
+      protocol: HTTP
+      hostname: harbor.container.it-scholar.com
+      allowedRoutes:
+        namespaces:
+          from: Same
+
+    # ── HTTPS: TLS termination; certificate managed by cert-manager ──────────
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: harbor.container.it-scholar.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: harbor-tls
+            namespace: harbor
+      allowedRoutes:
+        namespaces:
+          from: Same

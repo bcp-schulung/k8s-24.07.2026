@@ -1,0 +1,17 @@
+# Certificate — harbor.container.it-scholar.com
+#
+# cert-manager issues this via Let's Encrypt DNS-01 (Cloudflare).
+# The resulting Secret "harbor-tls" is referenced by the Gateway's HTTPS listener.
+#
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: harbor-tls
+  namespace: harbor
+spec:
+  secretName: harbor-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - harbor.container.it-scholar.com

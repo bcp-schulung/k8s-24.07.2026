@@ -1,0 +1,101 @@
+# HTTPRoutes for Harbor
+#
+# Two routes are required:
+#   1. HTTP → HTTPS redirect (port 80)
+#   2. HTTPS path-based routing to Harbor component services (port 443)
+#
+# Harbor component services (all ClusterIP, created by Helm):
+#   harbor-portal    :80   — React SPA (the web UI)
+#   harbor-core      :80   — REST API, token service, webhooks, Helm chart repo
+#   harbor-registry  :5000 — Docker Registry v2 API (push/pull)
+#
+# The order of rules in the HTTPS route matters: more-specific prefixes (/v2,
+# /api/, /service/, /chartrepo/, /c/) must be listed before the catch-all (/),
+# which sends everything else to the portal.
+#
+---
+# ── HTTP → HTTPS redirect ─────────────────────────────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: harbor-http-redirect
+  namespace: harbor
+spec:
+  parentRefs:
+    - name: harbor-gateway
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+
+---
+# ── HTTPS: path-based routing ─────────────────────────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: harbor-https
+  namespace: harbor
+spec:
+  parentRefs:
+    - name: harbor-gateway
+      sectionName: https
+  rules:
+    # Docker Registry v2 API — harbor-core handles token auth and internally
+    # proxies to harbor-registry. Routing /v2 directly to harbor-registry:5000
+    # bypasses token auth (the registry uses htpasswd-only for intra-cluster
+    # traffic and is not meant to be exposed directly to Docker clients).
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v2
+      backendRefs:
+        - name: harbor-core
+          port: 80
+
+    # Token service — Docker client fetches Bearer tokens here
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /service/
+      backendRefs:
+        - name: harbor-core
+          port: 80
+
+    # REST API
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/
+      backendRefs:
+        - name: harbor-core
+          port: 80
+
+    # Helm chart repository
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /chartrepo/
+      backendRefs:
+        - name: harbor-core
+          port: 80
+
+    # OIDC callback + miscellaneous core endpoints
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /c/
+      backendRefs:
+        - name: harbor-core
+          port: 80
+
+    # Portal — catch-all; serves the React SPA for all other paths
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: harbor-portal
+          port: 80

@@ -1,0 +1,77 @@
+# Harbor Helm Chart Values — Container Seminar
+#
+# Helm chart:  helm.goharbor.io/harbor
+# Deploy with: helm upgrade --install harbor harbor/harbor \
+#                --namespace harbor \
+#                --version 1.16.0 \
+#                --set harborAdminPassword="$HARBOR_ADMIN_PASSWORD" \
+#                -f harbor-values.yaml
+#
+# TLS is terminated at the Cilium Gateway; Harbor itself runs plain HTTP.
+# Path-based routing (04-httproute.yaml) sends /v2/ to harbor-registry:5000
+# and everything else to harbor-core:80 / harbor-portal:80.
+#
+
+# ── Exposure ───────────────────────────────────────────────────────────────────
+# type=ingress: Harbor creates ClusterIP services for each component and
+# generates Ingress objects (which we ignore — no ingress controller claims them).
+# Our Gateway API resources in 02-gateway.yaml / 04-httproute.yaml handle all
+# external traffic instead.
+expose:
+  type: ingress
+  tls:
+    enabled: false       # TLS terminated by the Gateway, not Harbor
+    certSource: none
+  ingress:
+    hosts:
+      core: harbor.container.it-scholar.com
+    className: ""        # no IngressClass → no Ingress controller picks this up
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"   # allow large image layers
+
+# External URL: must match what Docker clients and the web browser use.
+# Harbor embeds this in auth token realms and redirect URIs.
+externalURL: https://harbor.container.it-scholar.com
+
+# harborAdminPassword is injected via --set in deploy.sh (not stored here)
+
+# ── Notary (deprecated in Harbor 2.6+, removed in 2.11+) ─────────────────────
+notary:
+  enabled: false
+
+# ── Trivy vulnerability scanner ───────────────────────────────────────────────
+trivy:
+  enabled: true
+
+# ── Persistence — all volumes backed by Hetzner Cloud Volumes (hcloud-volumes) ─
+persistence:
+  enabled: true
+  # resourcePolicy: keep prevents volumes from being deleted on helm uninstall.
+  # Remove this line only when you intentionally want to destroy all data.
+  resourcePolicy: keep
+  persistentVolumeClaim:
+    registry:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 50Gi
+    jobservice:
+      jobLog:
+        storageClass: hcloud-volumes
+        accessMode: ReadWriteOnce
+        size: 5Gi
+    database:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 10Gi
+    redis:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 5Gi
+    trivy:
+      storageClass: hcloud-volumes
+      accessMode: ReadWriteOnce
+      size: 10Gi
+
+# ── Metrics (disabled for seminar simplicity) ─────────────────────────────────
+metrics:
+  enabled: false

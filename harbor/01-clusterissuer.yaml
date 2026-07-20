@@ -1,0 +1,28 @@
+# ClusterIssuer — Let's Encrypt via Cloudflare DNS-01
+#
+# Uses the CF_API_TOKEN from .env (same token provision.py already uses for
+# A-record management). deploy.sh creates the cloudflare-api-token Secret in
+# the cert-manager namespace before applying this manifest.
+#
+# DNS-01 is preferred over HTTP-01 here because:
+#   - certificate issuance is independent of the Gateway's LoadBalancer IP
+#   - no public HTTP listener on port 80 is required during issuance
+#   - wildcard certificates can be issued in future if needed
+#
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # ── Change this email to receive Let's Encrypt expiry warnings ────────────
+    email: admin@container.it-scholar.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod-acme-key
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token   # created by deploy.sh
+              key: api-token
