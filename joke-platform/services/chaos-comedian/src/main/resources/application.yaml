@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: chaos-comedian
+
+server:
+  port: ${SERVER_PORT:8084}
+  shutdown: graceful
+
+chaos-comedian:
+  instance-name: ${HOSTNAME:local}
+
+chaos:
+  termination:
+    enabled: ${CHAOS_TERMINATION_ENABLED:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+info:
+  application:
+    name: ${spring.application.name}
+    description: Produces controlled latency and failures
+    version: "@project.version@"

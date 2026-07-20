@@ -1,0 +1,102 @@
+# syntax=docker/dockerfile:1
+
+ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-21
+ARG RUNTIME_IMAGE=eclipse-temurin:21-jre-alpine
+
+# ------------------------------------------------------------
+# Build stage
+# ------------------------------------------------------------
+FROM ${MAVEN_IMAGE} AS builder
+
+ARG MODULE
+
+WORKDIR /workspace
+
+# Validate that the build argument was provided.
+RUN test -n "${MODULE}" \
+    || (echo "The MODULE build argument is required" && exit 1)
+
+# Copy Maven configuration first so dependency layers can be cached.
+COPY pom.xml ./
+COPY .mvn .mvn
+COPY mvnw mvnw
+COPY mvnw.cmd mvnw.cmd
+
+COPY services/joke-generator/pom.xml \
+    services/joke-generator/pom.xml
+
+COPY services/punchline-service/pom.xml \
+    services/punchline-service/pom.xml
+
+COPY services/audience-service/pom.xml \
+    services/audience-service/pom.xml
+
+COPY services/chaos-comedian/pom.xml \
+    services/chaos-comedian/pom.xml
+
+COPY services/joke-gateway/pom.xml \
+    services/joke-gateway/pom.xml
+
+RUN chmod +x mvnw
+
+# Download dependencies before copying source code.
+# This improves rebuild times when Java code changes.
+RUN ./mvnw \
+    -pl "services/${MODULE}" \
+    -am \
+    dependency:go-offline \
+    -DskipTests
+
+# Copy the complete source only after dependencies are cached.
+COPY services services
+
+# Build the requested service.
+RUN ./mvnw \
+    -pl "services/${MODULE}" \
+    -am \
+    clean package \
+    -DskipTests \
+    && JAR_FILE="$(find "services/${MODULE}/target" \
+         -maxdepth 1 \
+         -type f \
+         -name '*.jar' \
+         ! -name '*.jar.original' \
+         | head -n 1)" \
+    && test -n "${JAR_FILE}" \
+    && cp "${JAR_FILE}" /workspace/application.jar
+
+# ------------------------------------------------------------
+# Runtime stage
+# ------------------------------------------------------------
+FROM ${RUNTIME_IMAGE} AS runtime
+
+RUN apk add --no-cache wget \
+    && addgroup \
+         --system \
+         --gid 10001 \
+         spring \
+    && adduser \
+         --system \
+         --uid 10001 \
+         --ingroup spring \
+         --disabled-password \
+         spring
+
+WORKDIR /application
+
+COPY --from=builder \
+    --chown=spring:spring \
+    /workspace/application.jar \
+    application.jar
+
+USER spring:spring
+
+EXPOSE 8080
+
+ENV JAVA_TOOL_OPTIONS="\
+-XX:MaxRAMPercentage=75.0 \
+-XX:InitialRAMPercentage=25.0 \
+-XX:+ExitOnOutOfMemoryError \
+-Djava.security.egd=file:/dev/urandom"
+
+ENTRYPOINT ["java", "-jar", "/application/application.jar"]

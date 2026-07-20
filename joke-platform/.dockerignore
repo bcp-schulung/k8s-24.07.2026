@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Maven build output
+**/target
+**/.flattened-pom.xml
+
+# IDEs
+.idea
+.vscode
+.settings
+.classpath
+.project
+*.iml
+*.ipr
+*.iws
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Logs
+*.log
+logs
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+secrets
+
+# Documentation and infrastructure not needed during image builds
+docs
+infrastructure/kubernetes
+infrastructure/helm
+
+# Test reports and coverage
+**/surefire-reports
+**/failsafe-reports
+**/jacoco.exec

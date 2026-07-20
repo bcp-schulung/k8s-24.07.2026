@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: joke-generator
+
+server:
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
+
+joke-generator:
+  instance-name: ${HOSTNAME:local}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+info:
+  application:
+    name: ${spring.application.name}
+    description: Generates joke setups
+    version: "@project.version@"

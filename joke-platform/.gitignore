@@ -30,3 +30,6 @@ logs/
 !.env.example
 *.local
 secrets/
+
+# Local Docker Compose configuration
+infrastructure/docker/.env

@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class PunchlineServiceApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(PunchlineServiceApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(PunchlineServiceApplication.class, args);
+    }
 }

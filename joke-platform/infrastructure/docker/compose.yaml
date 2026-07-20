@@ -1,0 +1,288 @@
+name: joke-platform
+
+services:
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+
+    volumes:
+      - redis-data:/data
+
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+    networks:
+      - joke-platform
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-jokes}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-jokes}
+
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+    healthcheck:
+      test:
+        - CMD
+        - rabbitmq-diagnostics
+        - -q
+        - ping
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+    networks:
+      - joke-platform
+
+  joke-generator:
+    image: ${IMAGE_PREFIX:-joke-platform}/joke-generator:${IMAGE_TAG:-local}
+
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.spring-service
+      args:
+        MODULE: joke-generator
+
+    restart: unless-stopped
+
+    ports:
+      - "${GENERATOR_PORT:-8081}:8081"
+
+    environment:
+      SERVER_PORT: 8081
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS}
+      HOSTNAME: joke-generator-compose
+
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://localhost:8081/actuator/health/readiness
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - joke-platform
+
+  punchline-service:
+    image: ${IMAGE_PREFIX:-joke-platform}/punchline-service:${IMAGE_TAG:-local}
+
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.spring-service
+      args:
+        MODULE: punchline-service
+
+    restart: unless-stopped
+
+    ports:
+      - "${PUNCHLINE_PORT:-8082}:8082"
+
+    environment:
+      SERVER_PORT: 8082
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS}
+      HOSTNAME: punchline-service-compose
+
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://localhost:8082/actuator/health/readiness
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - joke-platform
+
+  audience-service:
+    image: ${IMAGE_PREFIX:-joke-platform}/audience-service:${IMAGE_TAG:-local}
+
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.spring-service
+      args:
+        MODULE: audience-service
+
+    restart: unless-stopped
+
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+    ports:
+      - "${AUDIENCE_PORT:-8083}:8083"
+
+    environment:
+      SERVER_PORT: 8083
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS}
+      HOSTNAME: audience-service-compose
+
+      AUDIENCE_STATISTICS_PROVIDER: redis
+      AUDIENCE_EVENTS_ENABLED: "true"
+      AUDIENCE_REDIS_HEALTH_ENABLED: "true"
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_CONNECT_TIMEOUT: 2s
+      REDIS_TIMEOUT: 2s
+
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-jokes}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-jokes}
+      RABBITMQ_CONNECTION_TIMEOUT: 3s
+
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://localhost:8083/actuator/health/readiness
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+    networks:
+      - joke-platform
+
+  chaos-comedian:
+    image: ${IMAGE_PREFIX:-joke-platform}/chaos-comedian:${IMAGE_TAG:-local}
+
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.spring-service
+      args:
+        MODULE: chaos-comedian
+
+    restart: unless-stopped
+
+    ports:
+      - "${CHAOS_PORT:-8084}:8084"
+
+    environment:
+      SERVER_PORT: 8084
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS}
+      HOSTNAME: chaos-comedian-compose
+
+      # Allows the terminate endpoint to demonstrate container restarts.
+      CHAOS_TERMINATION_ENABLED: "true"
+
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://localhost:8084/actuator/health/readiness
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - joke-platform
+
+  joke-gateway:
+    image: ${IMAGE_PREFIX:-joke-platform}/joke-gateway:${IMAGE_TAG:-local}
+
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.spring-service
+      args:
+        MODULE: joke-gateway
+
+    restart: unless-stopped
+
+    depends_on:
+      joke-generator:
+        condition: service_healthy
+      punchline-service:
+        condition: service_healthy
+      audience-service:
+        condition: service_healthy
+      chaos-comedian:
+        condition: service_healthy
+
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+
+    environment:
+      SERVER_PORT: 8080
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS}
+      HOSTNAME: joke-gateway-compose
+
+      JOKE_GENERATOR_URL: http://joke-generator:8081
+      PUNCHLINE_SERVICE_URL: http://punchline-service:8082
+      AUDIENCE_SERVICE_URL: http://audience-service:8083
+      CHAOS_COMEDIAN_URL: http://chaos-comedian:8084
+
+      BACKEND_CONNECT_TIMEOUT_MS: ${BACKEND_CONNECT_TIMEOUT_MS:-2000}
+      BACKEND_READ_TIMEOUT_MS: ${BACKEND_READ_TIMEOUT_MS:-10000}
+
+      THYMELEAF_CACHE: "false"
+
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://localhost:8080/actuator/health/readiness
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - joke-platform
+
+networks:
+  joke-platform:
+    name: joke-platform
+    driver: bridge
+
+volumes:
+  redis-data:
+    name: joke-platform-redis-data
+
+  rabbitmq-data:
+    name: joke-platform-rabbitmq-data

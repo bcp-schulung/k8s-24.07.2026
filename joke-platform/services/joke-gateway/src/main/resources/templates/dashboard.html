@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+    <title>Kubernetes Joke Platform</title>
+    <link
+        rel="stylesheet"
+        th:href="@{/css/dashboard.css}"
+        href="/css/dashboard.css"
+    >
+</head>
+<body>
+<header class="hero">
+    <div class="hero__content">
+        <p class="eyebrow">
+            Five-service Spring Boot demonstration
+        </p>
+
+        <h1>Kubernetes Joke Platform</h1>
+
+        <p class="hero__description">
+            Generate a joke, route it through several services,
+            inject controlled chaos and watch which instances
+            handled each stage.
+        </p>
+
+        <div class="instance-chip">
+            Gateway instance:
+            <strong th:text="${gatewayInstance}">
+                local
+            </strong>
+        </div>
+    </div>
+</header>
+
+<main class="layout">
+    <section class="panel controls-panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Controls</p>
+                <h2>Tell me a joke</h2>
+            </div>
+
+            <span id="request-status"
+                  class="status-badge status-idle">
+                Ready
+            </span>
+        </div>
+
+        <div class="controls-grid">
+            <label>
+                Category
+                <select id="category">
+                    <option value="">
+                        Any category
+                    </option>
+                    <option value="programming">
+                        Programming
+                    </option>
+                    <option value="kubernetes">
+                        Kubernetes
+                    </option>
+                    <option value="dad">
+                        Dad jokes
+                    </option>
+                    <option value="animal">
+                        Animals
+                    </option>
+                    <option value="science">
+                        Science
+                    </option>
+                </select>
+            </label>
+
+            <label>
+                Chaos mode
+                <select id="chaos-mode">
+                    <option value="none">
+                        No chaos
+                    </option>
+                    <option value="random">
+                        Random chaos
+                    </option>
+                    <option value="normal">
+                        Force normal
+                    </option>
+                    <option value="delay">
+                        Force delay
+                    </option>
+                    <option value="weird">
+                        Force weird
+                    </option>
+                    <option value="error">
+                        Force error
+                    </option>
+                </select>
+            </label>
+
+            <label>
+                Random seed
+                <input
+                    id="seed"
+                    type="number"
+                    min="0"
+                    placeholder="Optional"
+                >
+            </label>
+        </div>
+
+        <div class="button-row">
+            <button
+                id="generate-button"
+                type="button"
+                class="button button-primary"
+            >
+                Generate joke
+            </button>
+
+            <button
+                id="refresh-statistics-button"
+                type="button"
+                class="button"
+            >
+                Refresh statistics
+            </button>
+
+            <button
+                id="reset-statistics-button"
+                type="button"
+                class="button button-danger"
+            >
+                Reset statistics
+            </button>
+        </div>
+
+        <div
+            id="error-panel"
+            class="error-panel hidden"
+            role="alert"
+        >
+            <strong id="error-title">
+                Request failed
+            </strong>
+            <p id="error-message"></p>
+            <pre id="error-details"></pre>
+        </div>
+    </section>
+
+    <section class="panel joke-panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Result</p>
+                <h2>The joke</h2>
+            </div>
+
+            <span id="category-badge"
+                  class="category-badge">
+                Waiting
+            </span>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+            Select your options and generate a joke.
+        </div>
+
+        <div id="joke-result" class="hidden">
+            <p id="setup-text" class="setup-text"></p>
+            <p id="punchline-text"
+               class="punchline-text"></p>
+
+            <div class="audience-card">
+                <div>
+                    <p class="eyebrow">
+                        Audience reaction
+                    </p>
+                    <h3 id="reaction-name"></h3>
+                    <p id="reaction-description"></p>
+                </div>
+
+                <div id="reaction-score"
+                     class="score">
+                    0
+                </div>
+            </div>
+
+            <div id="chaos-card"
+                 class="chaos-card hidden">
+                <p class="eyebrow">
+                    Chaos comedian
+                </p>
+
+                <dl class="details-grid">
+                    <div>
+                        <dt>Requested</dt>
+                        <dd id="chaos-requested"></dd>
+                    </div>
+
+                    <div>
+                        <dt>Applied</dt>
+                        <dd id="chaos-applied"></dd>
+                    </div>
+
+                    <div>
+                        <dt>Delay</dt>
+                        <dd id="chaos-delay"></dd>
+                    </div>
+
+                    <div>
+                        <dt>Instance</dt>
+                        <dd id="chaos-instance"></dd>
+                    </div>
+                </dl>
+
+                <pre id="chaos-oddity"
+                     class="json-view hidden"></pre>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel trace-panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Request trace</p>
+                <h2>Which instance handled what?</h2>
+            </div>
+        </div>
+
+        <div class="trace-flow">
+            <article class="trace-node">
+                <span>1</span>
+                <div>
+                    <strong>Gateway</strong>
+                    <code id="trace-gateway">
+                        waiting
+                    </code>
+                </div>
+            </article>
+
+            <div class="trace-arrow">→</div>
+
+            <article class="trace-node">
+                <span>2</span>
+                <div>
+                    <strong>Generator</strong>
+                    <code id="trace-generator">
+                        waiting
+                    </code>
+                </div>
+            </article>
+
+            <div class="trace-arrow">→</div>
+
+            <article class="trace-node">
+                <span>3</span>
+                <div>
+                    <strong>Punchline</strong>
+                    <code id="trace-punchline">
+                        waiting
+                    </code>
+                </div>
+            </article>
+
+            <div class="trace-arrow">→</div>
+
+            <article class="trace-node">
+                <span>4</span>
+                <div>
+                    <strong>Chaos</strong>
+                    <code id="trace-chaos">
+                        waiting
+                    </code>
+                </div>
+            </article>
+
+            <div class="trace-arrow">→</div>
+
+            <article class="trace-node">
+                <span>5</span>
+                <div>
+                    <strong>Audience</strong>
+                    <code id="trace-audience">
+                        waiting
+                    </code>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <section class="panel statistics-panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Audience statistics</p>
+                <h2>How funny are we?</h2>
+            </div>
+
+            <span id="statistics-provider"
+                  class="status-badge">
+                unknown
+            </span>
+        </div>
+
+        <div class="metrics-grid">
+            <article class="metric">
+                <span>Total reactions</span>
+                <strong id="total-reactions">0</strong>
+            </article>
+
+            <article class="metric">
+                <span>Total score</span>
+                <strong id="total-score">0</strong>
+            </article>
+
+            <article class="metric">
+                <span>Average score</span>
+                <strong id="average-score">0.00</strong>
+            </article>
+        </div>
+
+        <div id="reaction-statistics"
+             class="reaction-statistics">
+        </div>
+    </section>
+</main>
+
+<footer>
+    <p>
+        Built to demonstrate scaling, load balancing,
+        service discovery, retries, failures, probes,
+        Redis and RabbitMQ.
+    </p>
+</footer>
+
+<script
+    th:src="@{/js/dashboard.js}"
+    src="/js/dashboard.js">
+</script>
+</body>
+</html>

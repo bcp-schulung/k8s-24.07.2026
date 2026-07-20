@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: audience-service
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${REDIS_TIMEOUT:2s}
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    connection-timeout: ${RABBITMQ_CONNECTION_TIMEOUT:2s}
+    template:
+      retry:
+        enabled: false
+
+server:
+  port: ${SERVER_PORT:8083}
+  shutdown: graceful
+
+audience-service:
+  instance-name: ${HOSTNAME:local}
+
+audience:
+  statistics:
+    provider: ${AUDIENCE_STATISTICS_PROVIDER:memory}
+  events:
+    enabled: ${AUDIENCE_EVENTS_ENABLED:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    rabbit:
+      enabled: ${AUDIENCE_EVENTS_ENABLED:false}
+    redis:
+      enabled: ${AUDIENCE_REDIS_HEALTH_ENABLED:false}
+
+info:
+  application:
+    name: ${spring.application.name}
+    description: Generates and records audience reactions
+    version: "@project.version@"

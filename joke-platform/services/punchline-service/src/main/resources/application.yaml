@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: punchline-service
+
+server:
+  port: ${SERVER_PORT:8082}
+  shutdown: graceful
+
+punchline-service:
+  instance-name: ${HOSTNAME:local}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+info:
+  application:
+    name: ${spring.application.name}
+    description: Resolves joke setups into punchlines
+    version: "@project.version@"
