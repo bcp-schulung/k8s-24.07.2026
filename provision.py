@@ -3,13 +3,14 @@
 Container Seminar — Hetzner + Cloudflare Provisioner
 =====================================================
 
-Provisions 1 VM per student on Hetzner Cloud, then on each VM:
-  - creates a 'student' user with passwordless sudo
-  - installs code-server (browser IDE) behind Caddy with Let's Encrypt TLS
-  - installs Docker Engine + Docker Compose v2 plugin
-  - installs kubectl (latest stable)
-  - installs Helm
-  - adds 'student' to the docker group
+Provisions 3 VMs per student on Hetzner Cloud:
+  - primary VM: existing code-server, Caddy, Docker, kubectl, Helm, and Trivy setup
+  - cp VM: clean Ubuntu with only the 'student' account and SSH access configured
+  - worker VM: clean Ubuntu with only the 'student' account and SSH access configured
+
+For each student, a dedicated SSH keypair is generated on the primary VM.
+The primary VM is configured so `ssh cp` and `ssh worker` connect directly
+to that student's cp and worker VMs as the student user.
 
 Prerequisites:
     pip install hcloud cloudflare fabric python-dotenv paramiko
@@ -53,6 +54,8 @@ DOMAIN_SUFFIX    = "container.it-scholar.com"
 HETZNER_KEY_NAME = "container-seminar-provisioner"
 FW_NAME          = "container-seminar-fw"
 PASSWORDS_FILE   = Path(__file__).parent / ".passwords.json"
+VM_ROLES         = ("primary", "cp", "worker")
+
 
 # slug   : used for the Hetzner VM name and DNS subdomain (ASCII, no umlauts)
 # display: shown in the summary / credentials file
@@ -265,43 +268,56 @@ def create_vm(name: str, ssh_key: object) -> tuple[str, str]:
     return name, ip
 
 
-def provision_hetzner() -> dict[str, str]:
-    """Phase 1: SSH key, firewall, and all VMs. Returns {slug: ip}."""
+def vm_name(slug: str, role: str) -> str:
+    """Return the Hetzner server name for a student's VM role."""
+    return slug if role == "primary" else f"{slug}-{role}"
+
+
+def provision_hetzner() -> dict[str, dict[str, str]]:
+    """Phase 1: create all primary/cp/worker VMs. Returns {slug: {role: ip}}."""
     log("=== Phase 1: Hetzner Infrastructure ===")
-    ssh_key  = ensure_hetzner_ssh_key()
+    ssh_key = ensure_hetzner_ssh_key()
     ensure_firewall()
 
-    vm_ips: dict[str, str] = {}
-    with ThreadPoolExecutor(max_workers=len(STUDENTS)) as pool:
+    vm_ips: dict[str, dict[str, str]] = {s["slug"]: {} for s in STUDENTS}
+    jobs = [
+        (s["slug"], role, vm_name(s["slug"], role))
+        for s in STUDENTS
+        for role in VM_ROLES
+    ]
+
+    with ThreadPoolExecutor(max_workers=min(16, len(jobs))) as pool:
         futures = {
-            pool.submit(create_vm, s["slug"], ssh_key): s["slug"]
-            for s in STUDENTS
+            pool.submit(create_vm, name, ssh_key): (slug, role)
+            for slug, role, name in jobs
         }
         for f in as_completed(futures):
-            name, ip = f.result()
-            vm_ips[name] = ip
+            slug, role = futures[f]
+            _name, ip = f.result()
+            vm_ips[slug][role] = ip
 
-    # Apply firewall to all servers
     fw = hc.firewalls.get_by_name(FW_NAME)
-    for slug in vm_ips:
-        server = hc.servers.get_by_name(slug)
-        if server:
-            try:
-                hc.firewalls.apply_to_resources(
-                    firewall=fw,
-                    resources=[
-                        FirewallResource(
-                            type=FirewallResource.TYPE_SERVER,
-                            server=server,
-                        )
-                    ],
-                )
-                log(f"  Firewall applied to '{slug}'.")
-            except Exception as e:
-                if "firewall_already_applied" in str(e):
-                    log(f"  Firewall already applied to '{slug}', skipping.")
-                else:
-                    log(f"  Warning: could not apply firewall to '{slug}': {e}")
+    for slug, roles in vm_ips.items():
+        for role in roles:
+            name = vm_name(slug, role)
+            server = hc.servers.get_by_name(name)
+            if server:
+                try:
+                    hc.firewalls.apply_to_resources(
+                        firewall=fw,
+                        resources=[
+                            FirewallResource(
+                                type=FirewallResource.TYPE_SERVER,
+                                server=server,
+                            )
+                        ],
+                    )
+                    log(f"  Firewall applied to '{name}'.")
+                except Exception as e:
+                    if "firewall_already_applied" in str(e):
+                        log(f"  Firewall already applied to '{name}', skipping.")
+                    else:
+                        log(f"  Warning: could not apply firewall to '{name}': {e}")
 
     log("Phase 1 complete.\n")
     return vm_ips
@@ -312,12 +328,12 @@ def provision_hetzner() -> dict[str, str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def setup_dns(vm_ips: dict[str, str]) -> None:
+def setup_dns(vm_ips: dict[str, dict[str, str]]) -> None:
     """Phase 2: create/update A records for every student VM."""
     log("=== Phase 2: Cloudflare DNS ===")
     for student in STUDENTS:
         dns_name = f"{student['slug']}.{DOMAIN_SUFFIX}"
-        ip       = vm_ips[student["slug"]]
+        ip       = vm_ips[student["slug"]]["primary"]
 
         all_records = list(cf.dns.records.list(zone_id=CF_ZONE_ID))
         existing = [
@@ -425,17 +441,54 @@ def configure_base_vm(name: str, ip: str) -> None:
     raise RuntimeError(f"[{name}] All 5 base-configuration attempts failed")
 
 
-def configure_all_base(vm_ips: dict[str, str]) -> None:
-    """Phase 3: wait for SSH, then configure base OS in parallel."""
+def configure_clean_node(name: str, ip: str) -> None:
+    """Configure only the student account and provisioner SSH access."""
+    pub_key = Path(SSH_PUBLIC_KEY).read_text().strip()
+    sudoers_line = "student ALL=(ALL) NOPASSWD:ALL\n"
+
+    log(f"  [{name}] Configuring clean Ubuntu node access ...")
+    for attempt in range(1, 6):
+        try:
+            with connection(ip) as c:
+                c.run("id student &>/dev/null || useradd -m -s /bin/bash student", hide=True)
+                put_text(c, sudoers_line, "/etc/sudoers.d/student")
+                c.run("chmod 440 /etc/sudoers.d/student", hide=True)
+                c.run(
+                    "install -d -m 700 -o student -g student /home/student/.ssh",
+                    hide=True,
+                )
+                put_text(c, pub_key + "\n", "/home/student/.ssh/authorized_keys")
+                c.run(
+                    "chmod 600 /home/student/.ssh/authorized_keys && "
+                    "chown student:student /home/student/.ssh/authorized_keys",
+                    hide=True,
+                )
+            log(f"  [{name}] Clean node access configuration done.")
+            return
+        except Exception as e:
+            log(f"  [{name}] Attempt {attempt}/5 failed: {type(e).__name__}: {e}")
+            if attempt < 5:
+                time.sleep(15)
+    raise RuntimeError(f"[{name}] All 5 clean-node configuration attempts failed")
+
+
+def configure_all_base(vm_ips: dict[str, dict[str, str]]) -> None:
+    """Phase 3: configure primary fully; keep cp/worker minimal."""
     log("=== Phase 3: Base OS Configuration ===")
-    for ip in vm_ips.values():
+    all_vms = [
+        (slug, role, vm_name(slug, role), ip)
+        for slug, roles in vm_ips.items()
+        for role, ip in roles.items()
+    ]
+
+    for _slug, _role, _name, ip in all_vms:
         wait_for_ssh(ip)
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        futures = {
-            pool.submit(configure_base_vm, name, ip): name
-            for name, ip in vm_ips.items()
-        }
+    with ThreadPoolExecutor(max_workers=min(16, len(all_vms))) as pool:
+        futures = {}
+        for _slug, role, name, ip in all_vms:
+            fn = configure_base_vm if role == "primary" else configure_clean_node
+            futures[pool.submit(fn, name, ip)] = name
         for f in as_completed(futures):
             f.result()
     log("Phase 3 complete.\n")
@@ -566,7 +619,80 @@ def configure_vm(ip: str, slug: str, password: str) -> None:
     log(f"  [{slug}] VM setup complete.")
 
 
-def configure_all_vms(vm_ips: dict[str, str]) -> dict[str, str]:
+def configure_student_ssh(primary_ip: str, cp_ip: str, worker_ip: str, slug: str) -> None:
+    """Create a per-student keypair on primary and configure ssh cp/worker aliases."""
+    log(f"  [{slug}] Configuring SSH access to cp and worker ...")
+
+    with connection(primary_ip) as c:
+        c.run(
+            "install -d -m 700 -o student -g student /home/student/.ssh && "
+            "test -f /home/student/.ssh/id_ed25519 || "
+            "sudo -u student ssh-keygen -t ed25519 -N '' "
+            "-C 'container-seminar' -f /home/student/.ssh/id_ed25519",
+            hide=True,
+        )
+        result = c.run("cat /home/student/.ssh/id_ed25519.pub", hide=True)
+        student_pub = result.stdout.strip()
+
+        ssh_config = (
+            "Host cp\n"
+            f"    HostName {cp_ip}\n"
+            "    User student\n"
+            "    IdentityFile ~/.ssh/id_ed25519\n"
+            "    IdentitiesOnly yes\n"
+            "    StrictHostKeyChecking accept-new\n"
+            "\n"
+            "Host worker\n"
+            f"    HostName {worker_ip}\n"
+            "    User student\n"
+            "    IdentityFile ~/.ssh/id_ed25519\n"
+            "    IdentitiesOnly yes\n"
+            "    StrictHostKeyChecking accept-new\n"
+        )
+        put_text(c, ssh_config, "/home/student/.ssh/config")
+        c.run(
+            "chmod 600 /home/student/.ssh/config && "
+            "chown student:student /home/student/.ssh/config",
+            hide=True,
+        )
+
+    for role, ip in (("cp", cp_ip), ("worker", worker_ip)):
+        with connection(ip) as c:
+            put_text(c, student_pub + "\n", "/tmp/student-primary.pub")
+            c.run(
+                "install -d -m 700 -o student -g student /home/student/.ssh && "
+                "touch /home/student/.ssh/authorized_keys && "
+                "grep -qxF -f /tmp/student-primary.pub "
+                "/home/student/.ssh/authorized_keys || "
+                "cat /tmp/student-primary.pub >> /home/student/.ssh/authorized_keys; "
+                "chmod 600 /home/student/.ssh/authorized_keys; "
+                "chown student:student /home/student/.ssh/authorized_keys; "
+                "rm -f /tmp/student-primary.pub",
+                hide=True,
+            )
+        log(f"  [{slug}] SSH key installed on {role}.")
+
+
+def configure_all_student_ssh(vm_ips: dict[str, dict[str, str]]) -> None:
+    """Configure per-student primary -> cp/worker SSH access in parallel."""
+    log("=== Phase 5: Student SSH Access ===")
+    with ThreadPoolExecutor(max_workers=min(8, len(STUDENTS))) as pool:
+        futures = {
+            pool.submit(
+                configure_student_ssh,
+                vm_ips[s["slug"]]["primary"],
+                vm_ips[s["slug"]]["cp"],
+                vm_ips[s["slug"]]["worker"],
+                s["slug"],
+            ): s["slug"]
+            for s in STUDENTS
+        }
+        for f in as_completed(futures):
+            f.result()
+    log("Phase 5 complete.\n")
+
+
+def configure_all_vms(vm_ips: dict[str, dict[str, str]]) -> dict[str, str]:
     """Phase 4: configure all VMs in parallel. Returns {slug: password}."""
     log("=== Phase 4: code-server + Caddy + Docker + kubectl + Helm ===")
 
@@ -576,7 +702,7 @@ def configure_all_vms(vm_ips: dict[str, str]) -> dict[str, str]:
         futures = {
             pool.submit(
                 configure_vm,
-                vm_ips[s["slug"]],
+                vm_ips[s["slug"]]["primary"],
                 s["slug"],
                 passwords[s["slug"]],
             ): s["slug"]
@@ -590,51 +716,55 @@ def configure_all_vms(vm_ips: dict[str, str]) -> dict[str, str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 5 — Summary
+# Phase 6 — Summary
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def print_summary(vm_ips: dict[str, str], passwords: dict[str, str]) -> None:
+def print_summary(vm_ips: dict[str, dict[str, str]], passwords: dict[str, str]) -> None:
     sep = "=" * 72
     print(f"\n{sep}")
     print("  PROVISIONING COMPLETE — Container Seminar")
     print(sep)
     for s in STUDENTS:
         slug = s["slug"]
-        ip   = vm_ips[slug]
-        url  = f"https://{slug}.{DOMAIN_SUFFIX}"
-        print(f"\n  Student  : {s['display']}")
-        print(f"  VM       : {slug}  ({ip})")
-        print(f"  URL      : {url}")
-        print(f"  Password : {passwords[slug]}")
-        print(f"  SSH      : ssh student@{ip}")
+        primary_ip = vm_ips[slug]["primary"]
+        cp_ip = vm_ips[slug]["cp"]
+        worker_ip = vm_ips[slug]["worker"]
+        url = f"https://{slug}.{DOMAIN_SUFFIX}"
+        print(f"\n  Student    : {s['display']}")
+        print(f"  Primary VM : {slug} ({primary_ip})")
+        print(f"  CP VM      : {vm_name(slug, 'cp')} ({cp_ip})")
+        print(f"  Worker VM  : {vm_name(slug, 'worker')} ({worker_ip})")
+        print(f"  URL        : {url}")
+        print(f"  Password   : {passwords[slug]}")
+        print(f"  Primary SSH: ssh student@{primary_ip}")
+        print("  From primary: ssh cp | ssh worker")
     print()
     print("  NOTES:")
-    print("  • Caddy obtains a Let's Encrypt cert on the first HTTPS request.")
-    print("    Allow ~60 s after DNS propagates before opening the URLs.")
-    print("  • DNS is set grey-cloud (proxy OFF) — required for HTTP-01 challenge.")
-    print("  • Docker is installed from the official Docker apt repository.")
-    print("    'student' is a member of the docker group (no sudo needed for docker).")
-    print("  • Docker Compose v2 is available as: docker compose")
-    print("  • kubectl 1.31 and Helm are pre-installed system-wide.")
+    print("  • Only the primary VM receives code-server and the seminar toolchain.")
+    print("  • cp and worker remain clean Ubuntu VMs with only the student account configured.")
+    print("  • Each student has a dedicated SSH key stored on their primary VM.")
+    print("  • From the primary VM, use exactly: ssh cp  or  ssh worker")
     print(sep)
 
-    # Write a machine-readable credentials markdown file alongside this script
     md_path = Path(__file__).parent / "container-seminar-credentials.md"
     rows = "\n".join(
         f"| {s['display']} "
         f"| https://{s['slug']}.{DOMAIN_SUFFIX} "
         f"| `{passwords[s['slug']]}` "
-        f"| {vm_ips[s['slug']]} |"
+        f"| {vm_ips[s['slug']]['primary']} "
+        f"| {vm_ips[s['slug']]['cp']} "
+        f"| {vm_ips[s['slug']]['worker']} |"
         for s in STUDENTS
     )
     md_path.write_text(
         "# Container Seminar — Credentials\n\n"
-        "| Student | URL | Password | IP |\n"
-        "|---|---|---|---|\n"
+        "| Student | URL | Password | Primary IP | CP IP | Worker IP |\n"
+        "|---|---|---|---|---|---|\n"
         f"{rows}\n\n"
-        "SSH login: `ssh student@<ip>`  \n"
-        "Docker, Docker Compose v2, kubectl, and Helm are pre-installed on each VM.\n"
+        "Primary login: `ssh student@<primary-ip>`  \n"
+        "From the primary VM: `ssh cp` or `ssh worker`.  \n"
+        "Only the primary VM has code-server and the seminar toolchain; cp and worker are clean Ubuntu VMs.\n"
     )
     print(f"\n  Credentials written to: {md_path}")
 
@@ -655,6 +785,7 @@ def main() -> None:
         base_f.result()
 
     passwords = configure_all_vms(vm_ips)
+    configure_all_student_ssh(vm_ips)
     print_summary(vm_ips, passwords)
 
 
