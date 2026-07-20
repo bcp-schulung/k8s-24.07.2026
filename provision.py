@@ -49,7 +49,10 @@ import paramiko
 
 SERVER_TYPE      = "cx23"                        # 2 vCPU / 4 GB RAM (Intel)
 IMAGE_NAME       = "ubuntu-24.04"
-LOCATION_NAME    = "hel1"                        # Helsinki, Finland
+LOCATION_NAME    = "hel1"                        # Preferred location
+LOCATION_FALLBACKS = ("fsn1", "nbg1", "hel1")      # Tried when placement capacity is unavailable
+CREATE_VM_ATTEMPTS = 6
+CREATE_VM_WORKERS  = 6                            # Avoid large placement bursts
 DOMAIN_SUFFIX    = "container.it-scholar.com"
 HETZNER_KEY_NAME = "container-seminar-provisioner"
 FW_NAME          = "container-seminar-fw"
@@ -237,23 +240,87 @@ def ensure_firewall() -> object:
     return result.firewall
 
 
+def _placement_locations() -> tuple[str, ...]:
+    """Return preferred + fallback locations without duplicates."""
+    configured = os.getenv("HCLOUD_LOCATIONS", "")
+    candidates = (
+        tuple(part.strip() for part in configured.split(",") if part.strip())
+        if configured
+        else (LOCATION_NAME, *LOCATION_FALLBACKS)
+    )
+    return tuple(dict.fromkeys(candidates))
+
+
+def _is_retryable_create_error(exc: Exception) -> bool:
+    """Identify temporary Hetzner placement/capacity errors."""
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "resource_unavailable",
+            "error during placement",
+            "rate_limit_exceeded",
+            "conflict",
+            "temporarily unavailable",
+            "timeout",
+        )
+    )
+
+
 def create_vm(name: str, ssh_key: object) -> tuple[str, str]:
-    """Create a single VM; return (name, public_ipv4)."""
+    """Create a VM, retrying temporary placement failures across locations."""
     existing = hc.servers.get_by_name(name)
     if existing:
         ip = existing.public_net.ipv4.ip
         log(f"  VM '{name}' already exists (IP: {ip}), skipping.")
         return name, ip
-    log(f"  Creating VM '{name}' ({SERVER_TYPE}, {IMAGE_NAME}, {LOCATION_NAME}) ...")
-    response = hc.servers.create(
-        name=name,
-        server_type=ServerType(name=SERVER_TYPE),
-        image=Image(name=IMAGE_NAME),
-        location=Location(name=LOCATION_NAME),
-        ssh_keys=[ssh_key],
-        public_net=ServerCreatePublicNetwork(enable_ipv4=True, enable_ipv6=True),
-    )
-    # Poll until the server exists and is running (Hetzner action API times out early)
+
+    locations = _placement_locations()
+    last_error: Exception | None = None
+
+    for attempt in range(1, CREATE_VM_ATTEMPTS + 1):
+        location = locations[(attempt - 1) % len(locations)]
+
+        # Another attempt or process may have completed this VM meanwhile.
+        existing = hc.servers.get_by_name(name)
+        if existing:
+            ip = existing.public_net.ipv4.ip
+            log(f"  VM '{name}' now exists (IP: {ip}), reusing.")
+            return name, ip
+
+        log(
+            f"  Creating VM '{name}' ({SERVER_TYPE}, {IMAGE_NAME}, {location}) "
+            f"attempt {attempt}/{CREATE_VM_ATTEMPTS} ..."
+        )
+        try:
+            hc.servers.create(
+                name=name,
+                server_type=ServerType(name=SERVER_TYPE),
+                image=Image(name=IMAGE_NAME),
+                location=Location(name=location),
+                ssh_keys=[ssh_key],
+                public_net=ServerCreatePublicNetwork(
+                    enable_ipv4=True,
+                    enable_ipv6=True,
+                ),
+            )
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            if not _is_retryable_create_error(exc) or attempt == CREATE_VM_ATTEMPTS:
+                raise
+            delay = min(60, 5 * attempt)
+            next_location = locations[attempt % len(locations)]
+            log(
+                f"  VM '{name}' placement failed in {location}: {exc}. "
+                f"Retrying in {delay}s using {next_location}."
+            )
+            time.sleep(delay)
+    else:
+        raise RuntimeError(f"Could not create VM '{name}': {last_error}")
+
+    # Poll until the server exists and is running.
     deadline = time.time() + 600
     server = None
     while time.time() < deadline:
@@ -261,10 +328,11 @@ def create_vm(name: str, ssh_key: object) -> tuple[str, str]:
         if server and server.status == "running":
             break
         time.sleep(5)
-    if not server:
-        raise RuntimeError(f"Server '{name}' never appeared in Hetzner API after 600s")
+    if not server or server.status != "running":
+        raise RuntimeError(f"Server '{name}' did not reach running state after 600s")
+
     ip = server.public_net.ipv4.ip
-    log(f"  VM '{name}' created (IP: {ip})")
+    log(f"  VM '{name}' created in {server.datacenter.location.name} (IP: {ip})")
     return name, ip
 
 
@@ -286,7 +354,7 @@ def provision_hetzner() -> dict[str, dict[str, str]]:
         for role in VM_ROLES
     ]
 
-    with ThreadPoolExecutor(max_workers=min(16, len(jobs))) as pool:
+    with ThreadPoolExecutor(max_workers=min(CREATE_VM_WORKERS, len(jobs))) as pool:
         futures = {
             pool.submit(create_vm, name, ssh_key): (slug, role)
             for slug, role, name in jobs
