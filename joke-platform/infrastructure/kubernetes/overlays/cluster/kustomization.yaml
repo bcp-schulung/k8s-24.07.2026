@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namePrefix: prod-
+
+bases:
+  - ../../base
+
+resources:
+  - hpa-joke-gateway.yaml
+  - hpa-joke-generator.yaml
+  - hpa-punchline-service.yaml
+  - hpa-audience-service.yaml
+  - ingress.yaml
+
+patchesStrategicMerge:
+  - deployment-replicas.yaml
+
+configMapGenerator:
+  - name: environment-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+
+images:
+  - name: harbor.bcp.education/joke-platform/joke-gateway
+    newTag: v1.0.0
+  - name: harbor.bcp.education/joke-platform/joke-generator
+    newTag: v1.0.0
+  - name: harbor.bcp.education/joke-platform/punchline-service
+    newTag: v1.0.0
+  - name: harbor.bcp.education/joke-platform/audience-service
+    newTag: v1.0.0
+  - name: harbor.bcp.education/joke-platform/chaos-comedian
+    newTag: v1.0.0

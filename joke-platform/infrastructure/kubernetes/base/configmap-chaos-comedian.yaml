@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chaos-comedian-config
+  namespace: joke-platform
+  labels:
+    app.kubernetes.io/name: chaos-comedian
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: joke-platform
+data:
+  SERVER_PORT: "8084"

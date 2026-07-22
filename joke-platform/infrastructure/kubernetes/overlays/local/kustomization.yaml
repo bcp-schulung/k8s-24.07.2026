@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namePrefix: local-
+
+bases:
+  - ../../base
+
+patchesStrategicMerge:
+  - deployment-replicas.yaml
+  - resource-limits.yaml
+
+configMapGenerator:
+  - name: environment-config
+    literals:
+      - ENVIRONMENT=local
+      - LOG_LEVEL=DEBUG
+
+images:
+  - name: harbor.bcp.education/joke-platform/joke-gateway
+    newTag: dev
+  - name: harbor.bcp.education/joke-platform/joke-generator
+    newTag: dev
+  - name: harbor.bcp.education/joke-platform/punchline-service
+    newTag: dev
+  - name: harbor.bcp.education/joke-platform/audience-service
+    newTag: dev
+  - name: harbor.bcp.education/joke-platform/chaos-comedian
+    newTag: dev

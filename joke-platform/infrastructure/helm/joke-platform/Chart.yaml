@@ -1,0 +1,16 @@
+apiVersion: v2
+name: joke-platform
+description: A Helm chart for the Kubernetes Joke Platform microservices
+type: application
+version: 1.0.0
+appVersion: "0.0.1"
+keywords:
+  - microservices
+  - spring-boot
+  - kubernetes
+  - jokes
+maintainers:
+  - name: BCP Education
+    email: admin@bcp.education
+sources:
+  - https://github.com/bcp-education/joke-platform

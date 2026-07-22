@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: joke-gateway
+  namespace: joke-platform
+spec:
+  template:
+    spec:
+      containers:
+      - name: joke-gateway
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: joke-generator
+  namespace: joke-platform
+spec:
+  template:
+    spec:
+      containers:
+      - name: joke-generator
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: punchline-service
+  namespace: joke-platform
+spec:
+  template:
+    spec:
+      containers:
+      - name: punchline-service
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audience-service
+  namespace: joke-platform
+spec:
+  template:
+    spec:
+      containers:
+      - name: audience-service
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chaos-comedian
+  namespace: joke-platform
+spec:
+  template:
+    spec:
+      containers:
+      - name: chaos-comedian
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 100m
+            memory: 256Mi

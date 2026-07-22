@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: joke-generator
+  namespace: joke-platform
+  labels:
+    app.kubernetes.io/name: joke-generator
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: joke-platform
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8081
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: joke-generator
+    app.kubernetes.io/component: backend

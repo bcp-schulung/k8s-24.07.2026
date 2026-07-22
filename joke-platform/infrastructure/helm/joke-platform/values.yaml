@@ -1,0 +1,211 @@
+# Default values for joke-platform
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  namespace: joke-platform
+  imageRegistry: harbor.bcp.education
+  imagePullPolicy: IfNotPresent
+  
+# Service-specific configurations
+services:
+  jokeGateway:
+    enabled: true
+    name: joke-gateway
+    replicaCount: 2
+    image:
+      repository: joke-platform/joke-gateway
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 8080
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    config:
+      backendConnectTimeoutMs: 2000
+      backendReadTimeoutMs: 7000
+      thymeleafCache: true
+
+  jokeGenerator:
+    enabled: true
+    name: joke-generator
+    replicaCount: 2
+    image:
+      repository: joke-platform/joke-generator
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 8081
+    resources:
+      requests:
+        cpu: 250m
+        memory: 384Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+
+  punchlineService:
+    enabled: true
+    name: punchline-service
+    replicaCount: 2
+    image:
+      repository: joke-platform/punchline-service
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 8082
+    resources:
+      requests:
+        cpu: 250m
+        memory: 384Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+
+  audienceService:
+    enabled: true
+    name: audience-service
+    replicaCount: 2
+    image:
+      repository: joke-platform/audience-service
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 8083
+    resources:
+      requests:
+        cpu: 250m
+        memory: 384Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+    config:
+      statisticsProvider: redis
+      eventsEnabled: true
+      redisHealthEnabled: true
+
+  chaosComedian:
+    enabled: true
+    name: chaos-comedian
+    replicaCount: 1
+    image:
+      repository: joke-platform/chaos-comedian
+      tag: latest
+    service:
+      type: ClusterIP
+      port: 8084
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 250m
+        memory: 512Mi
+    autoscaling:
+      enabled: false
+
+# Redis configuration
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7.2-alpine
+  service:
+    port: 6379
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+  config:
+    maxmemory: "256mb"
+    maxmemoryPolicy: "allkeys-lru"
+
+# RabbitMQ configuration
+rabbitmq:
+  enabled: true
+  image:
+    repository: rabbitmq
+    tag: 3.13-management-alpine
+  service:
+    amqpPort: 5672
+    managementPort: 15672
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+  auth:
+    username: jokes
+    password: jokes-platform-secret
+    existingSecret: ""
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: cilium
+  hostname: jokes.bcp.education
+  tls:
+    enabled: true
+    secretName: joke-platform-tls
+    issuerName: letsencrypt-prod
+    issuerKind: ClusterIssuer
+
+# Network Policy
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /actuator/prometheus
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

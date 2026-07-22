@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audience-service-config
+  namespace: joke-platform
+  labels:
+    app.kubernetes.io/name: audience-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: joke-platform
+data:
+  SERVER_PORT: "8083"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_CONNECT_TIMEOUT: "2s"
+  REDIS_TIMEOUT: "2s"
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_CONNECTION_TIMEOUT: "2s"
+  AUDIENCE_STATISTICS_PROVIDER: "redis"
+  AUDIENCE_EVENTS_ENABLED: "true"
+  AUDIENCE_REDIS_HEALTH_ENABLED: "true"

@@ -1,0 +1,69 @@
+CHART NAME: {{ .Chart.Name }}
+CHART VERSION: {{ .Chart.Version }}
+APP VERSION: {{ .Chart.AppVersion }}
+
+** Please be patient while the chart is being deployed **
+
+The Joke Platform has been successfully deployed to namespace: {{ .Values.global.namespace }}
+
+Services deployed:
+{{- if .Values.services.jokeGateway.enabled }}
+  - joke-gateway (replicas: {{ .Values.services.jokeGateway.replicaCount }})
+{{- end }}
+{{- if .Values.services.jokeGenerator.enabled }}
+  - joke-generator (replicas: {{ .Values.services.jokeGenerator.replicaCount }})
+{{- end }}
+{{- if .Values.services.punchlineService.enabled }}
+  - punchline-service (replicas: {{ .Values.services.punchlineService.replicaCount }})
+{{- end }}
+{{- if .Values.services.audienceService.enabled }}
+  - audience-service (replicas: {{ .Values.services.audienceService.replicaCount }})
+{{- end }}
+{{- if .Values.services.chaosComedian.enabled }}
+  - chaos-comedian (replicas: {{ .Values.services.chaosComedian.replicaCount }})
+{{- end }}
+
+Infrastructure services:
+{{- if .Values.redis.enabled }}
+  - Redis (version: {{ .Values.redis.image.tag }})
+{{- end }}
+{{- if .Values.rabbitmq.enabled }}
+  - RabbitMQ (version: {{ .Values.rabbitmq.image.tag }})
+{{- end }}
+
+To access the Joke Platform:
+
+{{- if .Values.ingress.enabled }}
+
+1. Via Ingress (HTTPS):
+   https://{{ .Values.ingress.hostname }}
+
+{{- else }}
+
+1. Port forward to the gateway service:
+   kubectl port-forward -n {{ .Values.global.namespace }} svc/joke-gateway 8080:8080
+
+2. Open your browser to:
+   http://localhost:8080
+
+{{- end }}
+
+To view service logs:
+  kubectl logs -n {{ .Values.global.namespace }} -l app.kubernetes.io/name=joke-gateway -f
+
+To check pod status:
+  kubectl get pods -n {{ .Values.global.namespace }}
+
+To view metrics:
+  kubectl port-forward -n {{ .Values.global.namespace }} svc/joke-gateway 8080:8080
+  curl http://localhost:8080/actuator/prometheus
+
+{{- if .Values.monitoring.enabled }}
+
+Monitoring endpoints are exposed at /actuator/prometheus on each service.
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+ServiceMonitor resources have been created for Prometheus Operator integration.
+{{- end }}
+{{- end }}
+
+For more information, visit: https://github.com/bcp-education/joke-platform
