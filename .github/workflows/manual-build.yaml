@@ -1,0 +1,128 @@
+name: Manual Image Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to build (or "all" for all services)'
+        required: true
+        type: choice
+        options:
+          - all
+          - joke-gateway
+          - joke-generator
+          - punchline-service
+          - audience-service
+          - chaos-comedian
+      registry:
+        description: 'Container registry to push to'
+        required: true
+        type: choice
+        default: 'ghcr.io'
+        options:
+          - ghcr.io
+          - harbor
+      tag:
+        description: 'Custom tag (optional, defaults to workflow run number)'
+        required: false
+        type: string
+
+env:
+  REGISTRY_GHCR: ghcr.io
+  REGISTRY_HARBOR: ${{ secrets.HARBOR_REGISTRY }}
+  IMAGE_PREFIX: ${{ github.repository_owner }}/joke-platform
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set-services.outputs.services }}
+      registry: ${{ steps.set-registry.outputs.registry }}
+      tag: ${{ steps.set-tag.outputs.tag }}
+    
+    steps:
+      - name: Determine services to build
+        id: set-services
+        run: |
+          if [ "${{ inputs.service }}" = "all" ]; then
+            echo 'services=["joke-gateway","joke-generator","punchline-service","audience-service","chaos-comedian"]' >> $GITHUB_OUTPUT
+          else
+            echo 'services=["${{ inputs.service }}"]' >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Determine registry
+        id: set-registry
+        run: |
+          if [ "${{ inputs.registry }}" = "harbor" ]; then
+            echo "registry=${{ env.REGISTRY_HARBOR }}" >> $GITHUB_OUTPUT
+          else
+            echo "registry=${{ env.REGISTRY_GHCR }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Determine tag
+        id: set-tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=manual-${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-push:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.prepare.outputs.services) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to GitHub Container Registry
+        if: inputs.registry == 'ghcr.io'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Log in to Harbor Registry
+        if: inputs.registry == 'harbor'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.HARBOR_REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      
+      - name: Build image tag
+        id: image-tag
+        run: |
+          IMAGE="${{ needs.prepare.outputs.registry }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ needs.prepare.outputs.tag }}"
+          echo "image=${IMAGE}" >> $GITHUB_OUTPUT
+          echo "Building: ${IMAGE}"
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./joke-platform
+          file: ./joke-platform/infrastructure/docker/Dockerfile.spring-service
+          build-args: |
+            MODULE=${{ matrix.service }}
+          push: true
+          tags: ${{ steps.image-tag.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+      
+      - name: Output image
+        run: |
+          echo "✅ Successfully built and pushed:"
+          echo "${{ steps.image-tag.outputs.image }}"

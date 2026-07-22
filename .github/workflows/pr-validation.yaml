@@ -1,0 +1,65 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'joke-platform/**'
+      - '.github/workflows/build-images.yaml'
+      - '.github/workflows/pr-validation.yaml'
+
+jobs:
+  validate-builds:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - joke-gateway
+          - joke-generator
+          - punchline-service
+          - audience-service
+          - chaos-comedian
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./joke-platform
+          file: ./joke-platform/infrastructure/docker/Dockerfile.spring-service
+          build-args: |
+            MODULE=${{ matrix.service }}
+          push: false
+          tags: joke-platform/${{ matrix.service }}:pr-${{ github.event.pull_request.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+      
+      - name: Validate image
+        run: |
+          echo "✅ Successfully validated build for ${{ matrix.service }}"
+
+  pr-summary:
+    needs: validate-builds
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check build results
+        run: |
+          if [ "${{ needs.validate-builds.result }}" = "success" ]; then
+            echo "✅ All service images built successfully"
+            exit 0
+          else
+            echo "❌ Some service builds failed"
+            exit 1
+          fi
