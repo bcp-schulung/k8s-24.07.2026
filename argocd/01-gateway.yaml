@@ -1,82 +1,38 @@
-apiVersion: v1
-kind: Service
+# Ingress — nginx ingress controller
+#
+# ingress-nginx is installed in the ingress-nginx namespace (Helm) and creates
+# a Hetzner Cloud Load Balancer with a public IPv4 address. deploy.sh reads that
+# address and creates the argocd.container.it-scholar.com A record in Cloudflare.
+#
+# TLS is terminated by ingress-nginx; the certificate is managed by cert-manager
+# via the cluster-issuer annotation (02-certificate.yaml is no longer needed for
+# provisioning — cert-manager creates/renews the secret automatically).
+#
+# ArgoCD server must run in --insecure mode (server.insecure=true in
+# argocd-cmd-params-cm) so ingress-nginx can proxy plain HTTP to it.
+#
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
-  name: argocd-lb
+  name: argocd
   namespace: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
 spec:
-  type: LoadBalancer
-  selector:
-    app: argocd-tls-proxy
-  ports:
-    - name: https
-      port: 443
-      targetPort: 443
-    - name: http
-      port: 80
-      targetPort: 80
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: argocd-tls-proxy
-  namespace: argocd
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: argocd-tls-proxy
-  template:
-    metadata:
-      labels:
-        app: argocd-tls-proxy
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - containerPort: 443
-          name: https
-        - containerPort: 80
-          name: http
-        volumeMounts:
-        - name: cert
-          mountPath: /etc/nginx/ssl
-          readOnly: true
-        - name: config
-          mountPath: /etc/nginx/conf.d
-          readOnly: true
-      volumes:
-      - name: cert
-        secret:
-          secretName: argocd-tls
-      - name: config
-        configMap:
-          name: argocd-tls-proxy-conf
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: argocd-tls-proxy-conf
-  namespace: argocd
-data:
-  default.conf: |
-    server {
-      listen 443 ssl;
-      server_name argocd.container.it-scholar.com;
-
-      ssl_certificate /etc/nginx/ssl/tls.crt;
-      ssl_certificate_key /etc/nginx/ssl/tls.key;
-
-      location / {
-        proxy_pass http://argo-cd-argocd-server.argocd.svc.cluster.local:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-      }
-    }
-    server {
-      listen 80;
-      server_name argocd.container.it-scholar.com;
-      return 301 https://$host$request_uri;
-    }
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - argocd.container.it-scholar.com
+      secretName: argocd-tls
+  rules:
+    - host: argocd.container.it-scholar.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80

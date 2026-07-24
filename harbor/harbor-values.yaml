@@ -13,21 +13,24 @@
 #
 
 # ── Exposure ───────────────────────────────────────────────────────────────────
-# type=ingress: Harbor creates ClusterIP services for each component and
-# generates Ingress objects (which we ignore — no ingress controller claims them).
-# Our Gateway API resources in 02-gateway.yaml / 04-httproute.yaml handle all
-# external traffic instead.
+# type=ingress with ingress-nginx.
+# TLS is terminated by ingress-nginx; the certificate is managed by cert-manager
+# (DNS-01 via Cloudflare, ClusterIssuer letsencrypt-prod).
 expose:
   type: ingress
   tls:
-    enabled: false       # TLS terminated by the Gateway, not Harbor
-    certSource: none
+    enabled: true
+    certSource: secret   # cert-manager creates and renews harbor-tls
+    secret:
+      secretName: harbor-tls
   ingress:
     hosts:
       core: harbor.container.it-scholar.com
-    className: ""        # no IngressClass → no Ingress controller picks this up
+    className: nginx
     annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
       nginx.ingress.kubernetes.io/proxy-body-size: "0"   # allow large image layers
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
 
 # External URL: must match what Docker clients and the web browser use.
 # Harbor embeds this in auth token realms and redirect URIs.

@@ -863,6 +863,9 @@ def configure_student_kubeconfig(primary_ip: str, slug: str, merged_kubeconfig: 
             "chown student:student /home/student/.kube/config",
             hide=True,
         )
+        c.run("install -d -m 700 /root/.kube", hide=True)
+        put_text(c, merged_kubeconfig, "/root/.kube/config")
+        c.run("chmod 600 /root/.kube/config", hide=True)
     log(f"  [{slug}] Kubeconfig installed (contexts: staging, prod).")
 
 
