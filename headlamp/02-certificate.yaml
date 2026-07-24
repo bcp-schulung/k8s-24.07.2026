@@ -1,0 +1,20 @@
+# Certificate — headlamp.container.it-scholar.com
+#
+# cert-manager issues this via Let's Encrypt DNS-01 (Cloudflare), same
+# ClusterIssuer used by argocd/harbor. Technically redundant with the
+# cert-manager.io/cluster-issuer annotation on the chart's Ingress (ingress-shim
+# would create an equivalent Certificate automatically), but kept explicit here
+# to match the argocd/ and harbor/ folder conventions.
+#
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: headlamp-tls
+  namespace: headlamp
+spec:
+  secretName: headlamp-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - headlamp.container.it-scholar.com

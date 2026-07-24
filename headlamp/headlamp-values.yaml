@@ -1,0 +1,55 @@
+# Headlamp Helm Chart Values — Container Seminar
+#
+# Chart:  https://kubernetes-sigs.github.io/headlamp/ (headlamp/headlamp)
+# Deploy with: helm upgrade --install headlamp headlamp/headlamp \
+#                --namespace headlamp \
+#                -f headlamp-values.yaml
+#
+# TLS is terminated by ingress-nginx; the certificate is managed by cert-manager
+# (DNS-01 via Cloudflare, ClusterIssuer letsencrypt-prod) — same pattern as
+# argocd/ and harbor/.
+#
+# Auth model: standard Headlamp token login (NOT unsafeUseServiceAccountToken —
+# that would let anyone hitting the public URL in with zero auth). Users paste
+# a ServiceAccount bearer token at the login screen. deploy.sh mints one for the
+# chart's own service account (bound to cluster-admin, same shared-admin model
+# used everywhere else in this repo) and prints it, mirroring how argocd/deploy.sh
+# prints the initial admin password.
+
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  name: headlamp
+
+clusterRoleBinding:
+  create: true
+  clusterRoleName: cluster-admin
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+  hosts:
+    - host: headlamp.container.it-scholar.com
+      paths:
+        - path: /
+          type: Prefix
+  tls:
+    - secretName: headlamp-tls
+      hosts:
+        - headlamp.container.it-scholar.com
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

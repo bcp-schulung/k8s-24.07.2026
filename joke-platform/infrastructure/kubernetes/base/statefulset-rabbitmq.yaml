@@ -73,31 +73,38 @@ spec:
           value: "-rabbit log_levels [{connection,error},{default,warning}]"
         resources:
           requests:
-            cpu: 200m
+            cpu: 250m
             memory: 256Mi
           limits:
             cpu: 500m
             memory: 512Mi
-        livenessProbe:
+        startupProbe:
           exec:
             command:
             - rabbitmq-diagnostics
             - -q
-            - ping
-          initialDelaySeconds: 30
-          periodSeconds: 10
+            - check_running
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 10
+          failureThreshold: 30
+        livenessProbe:
+          tcpSocket:
+            port: amqp
+          initialDelaySeconds: 0
+          periodSeconds: 15
           timeoutSeconds: 5
-          failureThreshold: 3
+          failureThreshold: 6
         readinessProbe:
           exec:
             command:
             - rabbitmq-diagnostics
             - -q
             - check_running
-          initialDelaySeconds: 20
-          periodSeconds: 5
-          timeoutSeconds: 5
-          failureThreshold: 3
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 6
         volumeMounts:
         - name: rabbitmq-data
           mountPath: /var/lib/rabbitmq
