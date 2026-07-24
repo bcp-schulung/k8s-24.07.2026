@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-REGISTRY="${DOCKER_REGISTRY:-harbor.bcp.education}"
+REGISTRY="${DOCKER_REGISTRY:-harbor.container.it-scholar.com}"
 TAG="${1:-latest}"
 
 SERVICES=("joke-gateway" "joke-generator" "punchline-service" "audience-service" "chaos-comedian")

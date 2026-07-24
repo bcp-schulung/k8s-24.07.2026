@@ -102,7 +102,7 @@ make k8s-deploy-prod
 kubectl apply -k infrastructure/kubernetes/overlays/cluster
 ```
 
-Access via ingress: https://jokes.bcp.education
+Access via ingress: https://jokes.container.it-scholar.com
 
 ### Helm Deployment
 

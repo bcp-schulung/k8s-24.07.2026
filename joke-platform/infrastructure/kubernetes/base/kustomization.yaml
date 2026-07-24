@@ -32,12 +32,17 @@ commonLabels:
 
 images:
   - name: harbor.bcp.education/joke-platform/joke-gateway
-    newTag: latest
+    newName: harbor.container.it-scholar.com/joke-platform/joke-gateway
+    newTag: local
   - name: harbor.bcp.education/joke-platform/joke-generator
+    newName: harbor.container.it-scholar.com/joke-platform/joke-generator
     newTag: latest
   - name: harbor.bcp.education/joke-platform/punchline-service
-    newTag: latest
+    newName: harbor.container.it-scholar.com/joke-platform/punchline-service
+    newTag: 1.0.0
   - name: harbor.bcp.education/joke-platform/audience-service
-    newTag: latest
+    newName: harbor.container.it-scholar.com/joke-platform/audience-service
+    newTag: local
   - name: harbor.bcp.education/joke-platform/chaos-comedian
-    newTag: latest
+    newName: harbor.container.it-scholar.com/joke-platform/chaos-comedian
+    newTag: 0.0.1

@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: joke-generator
-        image: harbor.bcp.education/joke-platform/joke-generator:latest
+        image: harbor.container.it-scholar.com/joke-platform/joke-generator:latest
         imagePullPolicy: Always
         ports:
         - name: http

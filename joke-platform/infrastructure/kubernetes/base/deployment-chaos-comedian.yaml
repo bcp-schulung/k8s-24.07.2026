@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: chaos-comedian
-        image: harbor.bcp.education/joke-platform/chaos-comedian:latest
+        image: harbor.container.it-scholar.com/joke-platform/chaos-comedian:0.0.1
         imagePullPolicy: Always
         ports:
         - name: http

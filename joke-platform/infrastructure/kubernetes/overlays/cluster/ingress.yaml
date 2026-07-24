@@ -11,7 +11,7 @@ spec:
   - name: prod-joke-platform-gateway
     namespace: joke-platform
   hostnames:
-  - "jokes.bcp.education"
+  - "jokes.container.it-scholar.com"
   rules:
   - matches:
     - path:
@@ -35,11 +35,11 @@ spec:
   - name: http
     protocol: HTTP
     port: 80
-    hostname: "jokes.bcp.education"
+    hostname: "jokes.container.it-scholar.com"
   - name: https
     protocol: HTTPS
     port: 443
-    hostname: "jokes.bcp.education"
+    hostname: "jokes.container.it-scholar.com"
     tls:
       mode: Terminate
       certificateRefs:
@@ -60,4 +60,4 @@ spec:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-  - jokes.bcp.education
+  - jokes.container.it-scholar.com

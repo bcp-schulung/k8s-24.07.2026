@@ -20,13 +20,13 @@ configMapGenerator:
       - LOG_LEVEL=DEBUG
 
 images:
-  - name: harbor.bcp.education/joke-platform/joke-gateway
+  - name: harbor.container.it-scholar.com/joke-platform/joke-gateway
     newTag: dev
-  - name: harbor.bcp.education/joke-platform/joke-generator
+  - name: harbor.container.it-scholar.com/joke-platform/joke-generator
     newTag: dev
-  - name: harbor.bcp.education/joke-platform/punchline-service
+  - name: harbor.container.it-scholar.com/joke-platform/punchline-service
     newTag: dev
-  - name: harbor.bcp.education/joke-platform/audience-service
+  - name: harbor.container.it-scholar.com/joke-platform/audience-service
     newTag: dev
-  - name: harbor.bcp.education/joke-platform/chaos-comedian
+  - name: harbor.container.it-scholar.com/joke-platform/chaos-comedian
     newTag: dev

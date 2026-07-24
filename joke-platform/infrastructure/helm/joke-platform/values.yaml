@@ -5,7 +5,7 @@
 # Global settings
 global:
   namespace: joke-platform
-  imageRegistry: harbor.bcp.education
+  imageRegistry: harbor.container.it-scholar.com
   imagePullPolicy: IfNotPresent
   
 # Service-specific configurations
@@ -16,7 +16,7 @@ services:
     replicaCount: 2
     image:
       repository: joke-platform/joke-gateway
-      tag: latest
+      tag: local
     service:
       type: ClusterIP
       port: 8080
@@ -74,7 +74,7 @@ services:
     replicaCount: 2
     image:
       repository: joke-platform/punchline-service
-      tag: latest
+      tag: 1.0.0
     service:
       type: ClusterIP
       port: 8082
@@ -104,7 +104,7 @@ services:
     replicaCount: 2
     image:
       repository: joke-platform/audience-service
-      tag: latest
+      tag: local
     service:
       type: ClusterIP
       port: 8083
@@ -136,7 +136,7 @@ services:
     replicaCount: 1
     image:
       repository: joke-platform/chaos-comedian
-      tag: latest
+      tag: 0.0.1
     service:
       type: ClusterIP
       port: 8084
@@ -228,7 +228,7 @@ cnpg:
 ingress:
   enabled: true
   className: cilium
-  hostname: jokes.bcp.education
+  hostname: jokes.container.it-scholar.com
   tls:
     enabled: true
     secretName: joke-platform-tls

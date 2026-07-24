@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: audience-service
-        image: harbor.bcp.education/joke-platform/audience-service:latest
+        image: harbor.container.it-scholar.com/joke-platform/audience-service:local
         imagePullPolicy: Always
         ports:
         - name: http

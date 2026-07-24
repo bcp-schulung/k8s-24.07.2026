@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: punchline-service
-        image: harbor.bcp.education/joke-platform/punchline-service:latest
+        image: harbor.container.it-scholar.com/joke-platform/punchline-service:1.0.0
         imagePullPolicy: Always
         ports:
         - name: http

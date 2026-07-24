@@ -59,5 +59,5 @@ if [[ "$OVERLAY" == "local" ]]; then
   echo "   kubectl port-forward -n $NAMESPACE svc/local-joke-gateway 8080:8080"
   echo "   Then open: http://localhost:8080"
 else
-  echo "   Access via ingress: https://jokes.bcp.education"
+  echo "   Access via ingress: https://jokes.container.it-scholar.com"
 fi
