@@ -154,7 +154,7 @@ async function generateJoke() {
 
     try {
         const response = await fetch(
-            "/api/v1/jokes",
+            "api/v1/jokes",
             {
                 method: "POST",
                 headers: {
@@ -189,7 +189,7 @@ async function generateJoke() {
 async function refreshStatistics() {
     try {
         const response = await fetch(
-            "/api/v1/statistics"
+            "api/v1/statistics"
         );
 
         const payload = await readJson(response);
@@ -220,7 +220,7 @@ async function resetStatistics() {
 
     try {
         const response = await fetch(
-            "/api/v1/statistics",
+            "api/v1/statistics",
             {
                 method: "DELETE"
             }
