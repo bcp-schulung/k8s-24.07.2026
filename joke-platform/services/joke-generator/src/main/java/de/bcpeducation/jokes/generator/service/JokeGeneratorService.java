@@ -7,8 +7,7 @@ import de.bcpeducation.jokes.generator.repository.JokeSetupRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.random.RandomGenerator;
-import java.util.random.RandomGeneratorFactory;
+import java.util.Random;
 
 @Service
 public class JokeGeneratorService {
@@ -26,7 +25,7 @@ public class JokeGeneratorService {
             throw new IllegalStateException("No joke setups are configured");
         }
 
-        RandomGenerator randomGenerator = createRandomGenerator(seed);
+        Random randomGenerator = createRandomGenerator(seed);
         int selectedIndex = randomGenerator.nextInt(candidates.size());
 
         return candidates.get(selectedIndex);
@@ -49,13 +48,11 @@ public class JokeGeneratorService {
         }
     }
 
-    private RandomGenerator createRandomGenerator(Long seed) {
+    private Random createRandomGenerator(Long seed) {
         if (seed == null) {
-            return RandomGenerator.getDefault();
+            return new Random();
         }
 
-        return RandomGeneratorFactory
-                .<RandomGenerator>of("L64X128MixRandom")
-                .create(seed);
+        return new Random(seed);
     }
 }

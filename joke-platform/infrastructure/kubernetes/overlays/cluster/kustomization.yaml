@@ -16,6 +16,7 @@ resources:
 patchesStrategicMerge:
   - deployment-replicas.yaml
   - configmap-db-host.yaml
+  - configmap-gateway-urls.yaml
   - cnpg-cluster.yaml
 
 configMapGenerator:

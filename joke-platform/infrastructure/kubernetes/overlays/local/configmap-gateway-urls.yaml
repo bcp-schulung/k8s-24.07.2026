@@ -1,0 +1,11 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: joke-gateway-config
+  namespace: joke-platform
+data:
+  JOKE_GENERATOR_URL: "http://local-joke-generator:8081"
+  PUNCHLINE_SERVICE_URL: "http://local-punchline-service:8082"
+  AUDIENCE_SERVICE_URL: "http://local-audience-service:8083"
+  CHAOS_COMEDIAN_URL: "http://local-chaos-comedian:8084"

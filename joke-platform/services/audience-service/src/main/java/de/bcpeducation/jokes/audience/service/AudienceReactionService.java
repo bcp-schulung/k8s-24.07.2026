@@ -9,8 +9,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.Random;
 import java.util.random.RandomGenerator;
-import java.util.random.RandomGeneratorFactory;
 
 @Service
 public class AudienceReactionService {
@@ -131,9 +131,7 @@ public class AudienceReactionService {
                 : System.nanoTime()
                   ^ joke.setupId().hashCode();
 
-        return RandomGeneratorFactory
-                .<RandomGenerator>of("L64X128MixRandom")
-                .create(effectiveSeed);
+        return new Random(effectiveSeed);
     }
 
     private int clamp(

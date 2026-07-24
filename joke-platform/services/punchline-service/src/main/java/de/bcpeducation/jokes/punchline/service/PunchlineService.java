@@ -8,8 +8,8 @@ import de.bcpeducation.jokes.punchline.repository.PunchlineRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Random;
 import java.util.random.RandomGenerator;
-import java.util.random.RandomGeneratorFactory;
 
 @Service
 public class PunchlineService {
@@ -71,11 +71,9 @@ public class PunchlineService {
 
     private RandomGenerator createRandomGenerator(Long seed) {
         if (seed == null) {
-            return RandomGenerator.getDefault();
+            return new Random();
         }
 
-        return RandomGeneratorFactory
-                .<RandomGenerator>of("L64X128MixRandom")
-                .create(seed);
+        return new Random(seed);
     }
 }

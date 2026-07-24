@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/part-of: joke-platform
 spec:
   parentRefs:
-  - name: joke-platform-gateway
+  - name: prod-joke-platform-gateway
     namespace: joke-platform
   hostnames:
   - "jokes.bcp.education"
@@ -18,7 +18,7 @@ spec:
         type: PathPrefix
         value: /
     backendRefs:
-    - name: joke-gateway
+    - name: prod-joke-gateway
       port: 8080
 ---
 apiVersion: gateway.networking.k8s.io/v1

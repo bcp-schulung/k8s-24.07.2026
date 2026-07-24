@@ -14,8 +14,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Random;
 import java.util.random.RandomGenerator;
-import java.util.random.RandomGeneratorFactory;
 
 @Service
 public class ChaosComedianService {
@@ -281,14 +281,10 @@ public class ChaosComedianService {
             Long seed
     ) {
         if (seed == null) {
-            return RandomGenerator.getDefault();
+            return new Random();
         }
 
-        return RandomGeneratorFactory
-                .<RandomGenerator>of(
-                        "L64X128MixRandom"
-                )
-                .create(seed);
+        return new Random(seed);
     }
 
     private void sleep(long delayMs) {

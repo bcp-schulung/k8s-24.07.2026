@@ -33,7 +33,7 @@ for service in "${SERVICES[@]}"; do
   
   docker build \
     -f infrastructure/docker/Dockerfile.spring-service \
-    --build-arg SERVICE_NAME="$service" \
+    --build-arg MODULE="$service" \
     -t "$IMAGE_NAME" \
     .
   
