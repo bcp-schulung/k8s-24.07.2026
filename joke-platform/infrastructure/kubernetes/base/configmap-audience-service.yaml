@@ -19,7 +19,7 @@ data:
   AUDIENCE_STATISTICS_PROVIDER: "database"
   AUDIENCE_EVENTS_ENABLED: "true"
   AUDIENCE_REDIS_HEALTH_ENABLED: "true"
-  DB_HOST: "postgres"
+  DB_HOST: "joke-platform-db-rw"
   DB_PORT: "5432"
   DB_NAME: "joke-platform"
   DB_USERNAME: "jokes"

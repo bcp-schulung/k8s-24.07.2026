@@ -62,7 +62,7 @@ services:
       targetCPUUtilizationPercentage: 70
     config:
       repositoryProvider: database
-      dbHost: postgres
+      dbHost: joke-platform-db-rw
       dbPort: 5432
       dbName: joke-platform
       dbUsername: jokes
@@ -92,7 +92,7 @@ services:
       targetCPUUtilizationPercentage: 70
     config:
       repositoryProvider: database
-      dbHost: postgres
+      dbHost: joke-platform-db-rw
       dbPort: 5432
       dbName: joke-platform
       dbUsername: jokes
@@ -124,7 +124,7 @@ services:
       statisticsProvider: database
       eventsEnabled: true
       redisHealthEnabled: true
-      dbHost: postgres
+      dbHost: joke-platform-db-rw
       dbPort: 5432
       dbName: joke-platform
       dbUsername: jokes
@@ -198,14 +198,22 @@ rabbitmq:
     password: jokes-platform-secret
     existingSecret: ""
 
-# PostgreSQL configuration
-postgres:
+# CloudNativePG configuration
+cnpg:
   enabled: true
+  clusterName: joke-platform-db
+  instances: 1
   image:
-    repository: postgres
-    tag: 16-alpine
-  service:
-    port: 5432
+    repository: ghcr.io/cloudnative-pg/postgresql
+    tag: "16.4"
+  bootstrap:
+    database: joke-platform
+    owner: jokes
+    existingSecret: postgres-credentials
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
   resources:
     requests:
       cpu: 100m
@@ -213,15 +221,8 @@ postgres:
     limits:
       cpu: 500m
       memory: 1Gi
-  persistence:
-    enabled: true
-    size: 10Gi
-    storageClass: ""
-  auth:
-    database: joke-platform
-    username: jokes
-    password: jokes-platform-secret
-    existingSecret: ""
+  affinity:
+    enablePodAntiAffinity: false
 
 # Ingress configuration
 ingress:

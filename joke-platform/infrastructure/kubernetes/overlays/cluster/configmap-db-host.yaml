@@ -1,0 +1,24 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: joke-generator-config
+  namespace: joke-platform
+data:
+  DB_HOST: "prod-joke-platform-db-rw"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: punchline-service-config
+  namespace: joke-platform
+data:
+  DB_HOST: "prod-joke-platform-db-rw"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audience-service-config
+  namespace: joke-platform
+data:
+  DB_HOST: "prod-joke-platform-db-rw"

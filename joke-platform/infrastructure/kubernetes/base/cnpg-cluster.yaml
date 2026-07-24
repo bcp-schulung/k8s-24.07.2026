@@ -1,0 +1,31 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: joke-platform-db
+  namespace: joke-platform
+  labels:
+    app.kubernetes.io/name: joke-platform-db
+    app.kubernetes.io/component: datastore
+    app.kubernetes.io/part-of: joke-platform
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.4
+  storage:
+    size: 10Gi
+  postgresql:
+    pg_hba:
+      - hostssl all all all scram-sha-256
+  bootstrap:
+    initdb:
+      database: joke-platform
+      owner: jokes
+      secret:
+        name: postgres-credentials
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: 500m

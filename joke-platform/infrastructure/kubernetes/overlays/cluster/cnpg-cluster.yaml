@@ -1,0 +1,14 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: joke-platform-db
+  namespace: joke-platform
+spec:
+  instances: 3
+  affinity:
+    enablePodAntiAffinity: true
+  bootstrap:
+    initdb:
+      secret:
+        name: prod-postgres-credentials

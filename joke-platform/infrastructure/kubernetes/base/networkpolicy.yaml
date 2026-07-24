@@ -98,6 +98,14 @@ spec:
     ports:
     - protocol: TCP
       port: 5672
+  # Allow PostgreSQL (CloudNativePG)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: joke-platform
+    ports:
+    - protocol: TCP
+      port: 5432
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

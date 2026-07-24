@@ -50,6 +50,17 @@ docker compose -f infrastructure/docker/compose.yaml down
 - Kubernetes cluster (kind, minikube, or production cluster)
 - kubectl configured and connected to cluster
 - Container images built and pushed to registry
+- CloudNativePG operator installed in the cluster (required for PostgreSQL)
+
+  ```bash
+  # Install the CloudNativePG operator (example using Helm)
+  helm repo add cnpg https://cloudnative-pg.github.io/charts
+  helm repo update
+  helm upgrade --install cnpg \
+    --namespace cnpg-system \
+    --create-namespace \
+    cnpg/cloudnative-pg
+  ```
 
 ### Deploy to Development Cluster
 
@@ -94,6 +105,15 @@ kubectl apply -k infrastructure/kubernetes/overlays/cluster
 Access via ingress: https://jokes.bcp.education
 
 ### Helm Deployment
+
+Create the PostgreSQL bootstrap secret before installing the chart (the default values expect a secret named `postgres-credentials`):
+
+```bash
+kubectl create secret generic postgres-credentials \
+  -n joke-platform \
+  --from-literal=username=jokes \
+  --from-literal=password=<strong-password>
+```
 
 Deploy using Helm chart:
 
@@ -176,6 +196,7 @@ kubectl create secret generic redis-credentials \
 
 kubectl create secret generic postgres-credentials \
   -n joke-platform \
+  --from-literal=username=jokes \
   --from-literal=password=<strong-password>
 ```
 
@@ -195,9 +216,18 @@ Schema versioning is handled by Flyway. Migrations are located in:
 
 **Local Docker Compose:** PostgreSQL starts automatically with the other infrastructure services. Data is persisted in the `postgres-data` volume.
 
-**Kubernetes:** A single-replica PostgreSQL StatefulSet (`statefulset-postgres.yaml`) is deployed with a 10Gi persistent volume. For production workloads, consider using a managed PostgreSQL instance and updating the `DB_HOST`/`DB_PORT` ConfigMap values accordingly.
+**Kubernetes:** PostgreSQL is deployed as a [CloudNativePG](https://cloudnative-pg.io/) `Cluster` (`base/cnpg-cluster.yaml`). The cluster bootstraps a `joke-platform` database owned by `jokes` and exposes a read-write service at `joke-platform-db-rw`. Services connect using the `postgres-credentials` secret.
 
-**Helm:** The Helm chart includes a PostgreSQL StatefulSet template (`templates/postgres.yaml`) and configuration in `values.yaml`. You can override credentials and persistence settings via custom values.
+- The `local` overlay runs a single-instance cluster for development.
+- The `cluster` overlay scales the cluster to 3 instances with pod anti-affinity for high availability.
+
+To override the cluster name or scale in an overlay, patch the `Cluster` resource:
+
+```bash
+kubectl patch cluster -n joke-platform prod-joke-platform-db --type merge -p '{"spec":{"instances":3}}'
+```
+
+**Helm:** The Helm chart includes a CloudNativePG `Cluster` template (`templates/cnpg-cluster.yaml`) and configuration in `values.yaml` under the `cnpg` key. You can override the cluster name, instance count, persistence, and credentials via custom values.
 
 ### Environment-Specific Configuration
 

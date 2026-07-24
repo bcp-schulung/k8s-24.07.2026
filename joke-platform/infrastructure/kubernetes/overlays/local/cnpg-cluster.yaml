@@ -1,0 +1,11 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: joke-platform-db
+  namespace: joke-platform
+spec:
+  bootstrap:
+    initdb:
+      secret:
+        name: local-postgres-credentials

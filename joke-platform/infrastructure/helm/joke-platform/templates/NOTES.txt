@@ -24,8 +24,8 @@ Services deployed:
 {{- end }}
 
 Infrastructure services:
-{{- if .Values.postgres.enabled }}
-  - PostgreSQL (version: {{ .Values.postgres.image.tag }})
+{{- if .Values.cnpg.enabled }}
+  - CloudNativePG PostgreSQL cluster: {{ .Values.cnpg.clusterName }} (instances: {{ .Values.cnpg.instances }}, version: {{ .Values.cnpg.image.tag }})
 {{- end }}
 {{- if .Values.redis.enabled }}
   - Redis (version: {{ .Values.redis.image.tag }})
