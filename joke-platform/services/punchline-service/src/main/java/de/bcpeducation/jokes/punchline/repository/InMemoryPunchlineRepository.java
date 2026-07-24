@@ -2,6 +2,7 @@ package de.bcpeducation.jokes.punchline.repository;
 
 import de.bcpeducation.jokes.punchline.domain.JokeCategory;
 import de.bcpeducation.jokes.punchline.domain.Punchline;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -9,6 +10,10 @@ import java.util.Locale;
 import java.util.Optional;
 
 @Repository
+@ConditionalOnProperty(
+        name = "punchline.repository.provider",
+        havingValue = "memory"
+)
 public class InMemoryPunchlineRepository
         implements PunchlineRepository {
 

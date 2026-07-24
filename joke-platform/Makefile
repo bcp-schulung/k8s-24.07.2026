@@ -68,7 +68,7 @@ helm-uninstall: ## Uninstall Helm release
 
 # Development helpers
 dev-gateway: ## Port-forward to gateway service (Docker)
-	@echo "Access gateway at http://localhost:8080"
+	@echo "Access gateway at http://localhost:8085"
 	docker compose -f infrastructure/docker/compose.yaml port joke-gateway 8080
 
 k8s-port-forward: ## Port-forward to gateway in Kubernetes

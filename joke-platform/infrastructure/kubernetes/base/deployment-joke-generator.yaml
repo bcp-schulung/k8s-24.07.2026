@@ -38,6 +38,11 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: password
         resources:
           requests:
             cpu: 250m

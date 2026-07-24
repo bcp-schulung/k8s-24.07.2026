@@ -2,11 +2,16 @@ package de.bcpeducation.jokes.generator.repository;
 
 import de.bcpeducation.jokes.generator.domain.JokeCategory;
 import de.bcpeducation.jokes.generator.domain.JokeSetup;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
+@ConditionalOnProperty(
+        name = "joke.generator.repository.provider",
+        havingValue = "memory"
+)
 public class InMemoryJokeSetupRepository implements JokeSetupRepository {
 
     private static final List<JokeSetup> JOKE_SETUPS = List.of(

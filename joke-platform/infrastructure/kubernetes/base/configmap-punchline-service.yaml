@@ -9,3 +9,8 @@ metadata:
     app.kubernetes.io/part-of: joke-platform
 data:
   SERVER_PORT: "8082"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "joke-platform"
+  DB_USERNAME: "jokes"
+  PUNCHLINE_REPOSITORY_PROVIDER: "database"

@@ -24,6 +24,9 @@ Services deployed:
 {{- end }}
 
 Infrastructure services:
+{{- if .Values.postgres.enabled }}
+  - PostgreSQL (version: {{ .Values.postgres.image.tag }})
+{{- end }}
 {{- if .Values.redis.enabled }}
   - Redis (version: {{ .Values.redis.image.tag }})
 {{- end }}

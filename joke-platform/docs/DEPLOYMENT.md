@@ -21,7 +21,7 @@ docker compose up -d
 ```
 
 Access the platform:
-- **Gateway Dashboard**: http://localhost:8080
+- **Gateway Dashboard**: http://localhost:8085
 - **Joke Generator API**: http://localhost:8081
 - **Punchline Service API**: http://localhost:8082
 - **Audience Service API**: http://localhost:8083
@@ -251,7 +251,7 @@ All services expose Prometheus metrics at `/actuator/prometheus`:
 
 ```bash
 # Docker Compose
-curl http://localhost:8080/actuator/prometheus
+curl http://localhost:8085/actuator/prometheus
 
 # Kubernetes (with port-forward)
 kubectl port-forward -n joke-platform svc/joke-gateway 8080:8080
@@ -295,6 +295,11 @@ Common issues:
 - Verify services are running: `docker compose ps`
 - Check port mappings: `docker compose port joke-gateway 8080`
 - Verify firewall settings
+- **Seminar VMs**: the friendly HTTPS domain (`https://<slug>.container.it-scholar.com`) is
+  reverse-proxied to `code-server` on that VM, *not* to Docker Compose. Access the
+  gateway directly on its published port instead, e.g.
+  `http://<slug>.container.it-scholar.com:8085/` (plain `http://`, no TLS on that
+  port). If `GATEWAY_PORT` was overridden in `.env`, use that port instead of 8085.
 
 **Kubernetes:**
 - Check service exists: `kubectl get svc -n joke-platform`

@@ -12,9 +12,19 @@ For each student, a dedicated SSH keypair is generated on the primary VM.
 The primary VM is configured so `ssh cp` and `ssh worker` connect directly
 to that student's cp and worker VMs as the student user.
 
+Each student's primary VM also receives a merged /home/student/.kube/config
+granting cluster-admin access to the two shared seminar Kubernetes clusters
+("staging" and "prod", provisioned separately via terraform/) as two contexts.
+NOTE: this is shared cluster-admin access — every student can see/modify any
+other student's resources on these two clusters. Acceptable for this seminar's
+shared infra (Harbor/ArgoCD), but do not reuse this pattern for anything where
+student isolation matters.
+
 Prerequisites:
-    pip install hcloud cloudflare fabric python-dotenv paramiko
+    pip install hcloud cloudflare fabric python-dotenv paramiko pyyaml
     Copy .env.example -> .env and fill in credentials.
+    Run `terraform apply` in terraform/ first so kubeconfig-staging and
+    kubeconfig-prod exist there.
 
 Usage:
     python provision.py
@@ -33,6 +43,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import cloudflare as cf_module
+import yaml
 from dotenv import load_dotenv
 from fabric import Connection
 from hcloud import Client as HCloudClient
@@ -59,6 +70,14 @@ HETZNER_KEY_NAME = "container-seminar-provisioner"
 FW_NAME          = "container-seminar-fw"
 PASSWORDS_FILE   = Path(__file__).parent / ".passwords.json"
 VM_ROLES         = ("primary", "cp", "worker")
+
+# Admin kubeconfigs written by `terraform apply` (terraform/main.tf outputs),
+# merged into one file with two contexts and distributed to every student.
+TERRAFORM_DIR = Path(__file__).parent / "terraform"
+CLUSTER_KUBECONFIGS = {
+    "staging": TERRAFORM_DIR / "kubeconfig-staging",
+    "prod": TERRAFORM_DIR / "kubeconfig-prod",
+}
 
 
 # slug   : used for the Hetzner VM name and DNS subdomain (ASCII, no umlauts)
@@ -786,6 +805,86 @@ def configure_all_student_ssh(vm_ips: dict[str, dict[str, str]]) -> None:
     log("Phase 5 complete.\n")
 
 
+# ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+# Phase 6 — Shared Kubernetes Cluster Access (staging + prod)
+# ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+def build_merged_kubeconfig() -> str:
+    """Merge the staging + prod admin kubeconfigs (written by `terraform apply`
+    in terraform/) into a single kubeconfig with two contexts named 'staging'
+    and 'prod', defaulting to 'staging'.
+
+    NOTE: this distributes the cluster-admin credentials as-is to every
+    student — there is no per-student RBAC scoping. Acceptable for this
+    seminar's shared infra, but do not reuse for anything requiring isolation.
+    """
+    merged: dict = {
+        "apiVersion": "v1",
+        "kind": "Config",
+        "preferences": {},
+        "clusters": [],
+        "users": [],
+        "contexts": [],
+        "current-context": "staging",
+    }
+    for env, path in CLUSTER_KUBECONFIGS.items():
+        if not path.exists():
+            raise FileNotFoundError(
+                f"{path} not found — run `terraform apply` in terraform/ first "
+                f"so it can write the {env} cluster's kubeconfig."
+            )
+        raw = yaml.safe_load(path.read_text())
+        cluster = raw["clusters"][0]["cluster"]
+        user = raw["users"][0]["user"]
+        namespace = raw["contexts"][0]["context"].get("namespace")
+
+        # Terraform names each generated cluster/user/context after the cluster
+        # itself (e.g. "container-seminar-staging"); rename them to the short
+        # env name so both fit in one file without colliding.
+        merged["clusters"].append({"name": env, "cluster": cluster})
+        merged["users"].append({"name": f"{env}-admin", "user": user})
+        context = {"cluster": env, "user": f"{env}-admin"}
+        if namespace:
+            context["namespace"] = namespace
+        merged["contexts"].append({"name": env, "context": context})
+
+    return yaml.safe_dump(merged, default_flow_style=False, sort_keys=False)
+
+
+def configure_student_kubeconfig(primary_ip: str, slug: str, merged_kubeconfig: str) -> None:
+    """Install the merged staging+prod kubeconfig on one student's primary VM."""
+    log(f"  [{slug}] Installing shared cluster kubeconfig (staging, prod) ...")
+    with connection(primary_ip) as c:
+        c.run("install -d -m 700 -o student -g student /home/student/.kube", hide=True)
+        put_text(c, merged_kubeconfig, "/home/student/.kube/config")
+        c.run(
+            "chmod 600 /home/student/.kube/config && "
+            "chown student:student /home/student/.kube/config",
+            hide=True,
+        )
+    log(f"  [{slug}] Kubeconfig installed (contexts: staging, prod).")
+
+
+def configure_all_student_kubeconfigs(vm_ips: dict[str, dict[str, str]]) -> None:
+    """Phase 6: install the merged staging+prod kubeconfig on every primary VM."""
+    log("=== Phase 6: Student Kubernetes Cluster Access ===")
+    merged_kubeconfig = build_merged_kubeconfig()
+    with ThreadPoolExecutor(max_workers=min(8, len(STUDENTS))) as pool:
+        futures = {
+            pool.submit(
+                configure_student_kubeconfig,
+                vm_ips[s["slug"]]["primary"],
+                s["slug"],
+                merged_kubeconfig,
+            ): s["slug"]
+            for s in STUDENTS
+        }
+        for f in as_completed(futures):
+            f.result()
+    log("Phase 6 complete.\n")
+
+
 def configure_all_vms(vm_ips: dict[str, dict[str, str]]) -> dict[str, str]:
     """Phase 4: configure all VMs in parallel. Returns {slug: password}."""
     log("=== Phase 4: code-server + Caddy + Docker + kubectl + Helm ===")
@@ -810,7 +909,7 @@ def configure_all_vms(vm_ips: dict[str, dict[str, str]]) -> dict[str, str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 6 — Summary
+# Phase 7 — Summary
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -839,6 +938,8 @@ def print_summary(vm_ips: dict[str, dict[str, str]], passwords: dict[str, str]) 
     print("  • cp and worker remain clean Ubuntu VMs with only the student account configured.")
     print("  • Each student has a dedicated SSH key stored on their primary VM.")
     print("  • From the primary VM, use exactly: ssh cp  or  ssh worker")
+    print("  • /home/student/.kube/config on the primary VM has cluster-admin access")
+    print("    to both shared clusters as contexts 'staging' and 'prod'.")
     print(sep)
 
     md_path = Path(__file__).parent / "container-seminar-credentials.md"
@@ -858,7 +959,9 @@ def print_summary(vm_ips: dict[str, dict[str, str]], passwords: dict[str, str]) 
         f"{rows}\n\n"
         "Primary login: `ssh student@<primary-ip>`  \n"
         "From the primary VM: `ssh cp` or `ssh worker`.  \n"
-        "Only the primary VM has code-server and the seminar toolchain; cp and worker are clean Ubuntu VMs.\n"
+        "Only the primary VM has code-server and the seminar toolchain; cp and worker are clean Ubuntu VMs.  \n"
+        "`~/.kube/config` on the primary VM has cluster-admin access to the shared "
+        "`staging`/`prod` clusters (contexts of the same name; `staging` is default).\n"
     )
     print(f"\n  Credentials written to: {md_path}")
 
@@ -880,6 +983,7 @@ def main() -> None:
 
     passwords = configure_all_vms(vm_ips)
     configure_all_student_ssh(vm_ips)
+    configure_all_student_kubeconfigs(vm_ips)
     print_summary(vm_ips, passwords)
 
 

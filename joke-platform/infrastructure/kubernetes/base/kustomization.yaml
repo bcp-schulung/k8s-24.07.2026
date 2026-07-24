@@ -6,6 +6,7 @@ namespace: joke-platform
 resources:
   - namespace.yaml
   - secrets.yaml
+  - configmap-postgres.yaml
   - configmap-joke-gateway.yaml
   - configmap-joke-generator.yaml
   - configmap-punchline-service.yaml
@@ -21,6 +22,7 @@ resources:
   - service-punchline-service.yaml
   - service-audience-service.yaml
   - service-chaos-comedian.yaml
+  - statefulset-postgres.yaml
   - statefulset-redis.yaml
   - statefulset-rabbitmq.yaml
   - networkpolicy.yaml

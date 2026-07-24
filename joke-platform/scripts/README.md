@@ -20,7 +20,7 @@ Automation scripts for building, testing, and deploying the Joke Platform.
 ```
 
 Services will be available at:
-- Gateway: http://localhost:8080
+- Gateway: http://localhost:8085
 - Other services: ports 8081-8084
 - RabbitMQ UI: http://localhost:15672
 

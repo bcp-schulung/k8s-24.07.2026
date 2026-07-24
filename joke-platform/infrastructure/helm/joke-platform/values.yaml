@@ -60,6 +60,13 @@ services:
       minReplicas: 2
       maxReplicas: 8
       targetCPUUtilizationPercentage: 70
+    config:
+      repositoryProvider: database
+      dbHost: postgres
+      dbPort: 5432
+      dbName: joke-platform
+      dbUsername: jokes
+      dbExistingSecret: postgres-credentials
 
   punchlineService:
     enabled: true
@@ -83,6 +90,13 @@ services:
       minReplicas: 2
       maxReplicas: 8
       targetCPUUtilizationPercentage: 70
+    config:
+      repositoryProvider: database
+      dbHost: postgres
+      dbPort: 5432
+      dbName: joke-platform
+      dbUsername: jokes
+      dbExistingSecret: postgres-credentials
 
   audienceService:
     enabled: true
@@ -107,9 +121,14 @@ services:
       maxReplicas: 8
       targetCPUUtilizationPercentage: 70
     config:
-      statisticsProvider: redis
+      statisticsProvider: database
       eventsEnabled: true
       redisHealthEnabled: true
+      dbHost: postgres
+      dbPort: 5432
+      dbName: joke-platform
+      dbUsername: jokes
+      dbExistingSecret: postgres-credentials
 
   chaosComedian:
     enabled: true
@@ -175,6 +194,31 @@ rabbitmq:
     size: 2Gi
     storageClass: ""
   auth:
+    username: jokes
+    password: jokes-platform-secret
+    existingSecret: ""
+
+# PostgreSQL configuration
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 16-alpine
+  service:
+    port: 5432
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+  auth:
+    database: joke-platform
     username: jokes
     password: jokes-platform-secret
     existingSecret: ""

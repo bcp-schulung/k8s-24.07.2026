@@ -2,9 +2,36 @@ spring:
   application:
     name: punchline-service
 
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:joke-platform}
+    username: ${DB_USERNAME:jokes}
+    password: ${DB_PASSWORD:jokes-secret}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
 server:
   port: ${SERVER_PORT:8082}
   shutdown: graceful
+
+punchline:
+  repository:
+    provider: ${PUNCHLINE_REPOSITORY_PROVIDER:database}
 
 punchline-service:
   instance-name: ${HOSTNAME:local}

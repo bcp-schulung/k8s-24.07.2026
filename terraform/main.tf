@@ -45,6 +45,14 @@ locals {
   # Allow the Kubernetes API (port 6443) from anywhere for seminar access.
   firewall_kube_api_source = ["0.0.0.0/0", "::/0"]
 
+  # Allow the Talos API (port 50000) from anywhere. Required for `terraform apply`
+  # (talos_machine_configuration_apply/bootstrap) and talosctl to reach the nodes.
+  # NOTE: setting firewall_kube_api_source above disables the module's automatic
+  # "allow my current IP" fallback for BOTH ports, so this must be set explicitly
+  # or the Talos API is left completely closed (this caused bootstrap to fail with
+  # connection timeouts/network-unreachable errors on port 50000).
+  firewall_talos_api_source = ["0.0.0.0/0", "::/0"]
+
   # Allow NodePort traffic on the default range from external clients.
   firewall_extra_rules = [
     {
@@ -83,8 +91,9 @@ module "staging" {
   cilium_gateway_api_enabled = true
   cert_manager_enabled       = true
 
-  firewall_kube_api_source = local.firewall_kube_api_source
-  firewall_extra_rules     = local.firewall_extra_rules
+  firewall_kube_api_source  = local.firewall_kube_api_source
+  firewall_talos_api_source = local.firewall_talos_api_source
+  firewall_extra_rules      = local.firewall_extra_rules
 
   # ── Node pools ────────────────────────────────────────────────────────────
   control_plane_nodepools = [
@@ -114,8 +123,9 @@ module "prod" {
   cilium_gateway_api_enabled = true
   cert_manager_enabled       = true
 
-  firewall_kube_api_source = local.firewall_kube_api_source
-  firewall_extra_rules     = local.firewall_extra_rules
+  firewall_kube_api_source  = local.firewall_kube_api_source
+  firewall_talos_api_source = local.firewall_talos_api_source
+  firewall_extra_rules      = local.firewall_extra_rules
 
   # ── Node pools ────────────────────────────────────────────────────────────
   control_plane_nodepools = [
