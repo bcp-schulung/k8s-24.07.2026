@@ -173,7 +173,31 @@ kubectl create secret generic rabbitmq-credentials \
 kubectl create secret generic redis-credentials \
   -n joke-platform \
   --from-literal=password=<strong-password>
+
+kubectl create secret generic postgres-credentials \
+  -n joke-platform \
+  --from-literal=password=<strong-password>
 ```
+
+### PostgreSQL
+
+The platform uses PostgreSQL 16 as the durable data store for:
+
+- `audience-service` — persisted audience reactions and statistics
+- `joke-generator` — joke setups
+- `punchline-service` — punchlines
+
+Schema versioning is handled by Flyway. Migrations are located in:
+
+- `services/audience-service/src/main/resources/db/migration/`
+- `services/joke-generator/src/main/resources/db/migration/`
+- `services/punchline-service/src/main/resources/db/migration/`
+
+**Local Docker Compose:** PostgreSQL starts automatically with the other infrastructure services. Data is persisted in the `postgres-data` volume.
+
+**Kubernetes:** A single-replica PostgreSQL StatefulSet (`statefulset-postgres.yaml`) is deployed with a 10Gi persistent volume. For production workloads, consider using a managed PostgreSQL instance and updating the `DB_HOST`/`DB_PORT` ConfigMap values accordingly.
+
+**Helm:** The Helm chart includes a PostgreSQL StatefulSet template (`templates/postgres.yaml`) and configuration in `values.yaml`. You can override credentials and persistence settings via custom values.
 
 ### Environment-Specific Configuration
 
